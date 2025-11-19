@@ -1,0 +1,99 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contextual Task & Habit Manager — Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Contextual Task & Habit Manager</h1>
+      <p>Минимальный демо-интерфейс поверх FastAPI backend (без LLM и внешних API).</p>
+    </header>
+
+    <section class="panel" id="auth-panel">
+      <h2>1. Регистрация и вход</h2>
+      <div class="auth-forms">
+        <form id="register-form">
+          <h3>Регистрация</h3>
+          <label>E-mail<input type="email" name="email" required /></label>
+          <label>Пароль<input type="password" name="password" required /></label>
+          <label>Часовой пояс<input type="text" name="timezone" value="Europe/Moscow" /></label>
+          <label>Язык<input type="text" name="language" value="ru" /></label>
+          <button type="submit">Создать</button>
+        </form>
+        <form id="login-form">
+          <h3>Вход</h3>
+          <label>E-mail<input type="email" name="email" required /></label>
+          <label>Пароль<input type="password" name="password" required /></label>
+          <button type="submit">Войти</button>
+        </form>
+      </div>
+      <p id="current-user">Не авторизованы</p>
+    </section>
+
+    <section class="panel" id="tasks-panel" hidden>
+      <h2>2. Задачи</h2>
+      <form id="task-form" class="inline-form">
+        <label>Дата<input type="date" id="tasks-date" required /></label>
+        <label>Время<input type="time" id="task-time" /></label>
+        <label>Заголовок<input type="text" id="task-title" required /></label>
+        <label>Описание<input type="text" id="task-description" /></label>
+        <label>Приоритет
+          <select id="task-priority">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+        <button type="submit">Добавить</button>
+      </form>
+      <div class="list" id="tasks-list"></div>
+    </section>
+
+    <section class="panel" id="habits-panel" hidden>
+      <h2>3. Привычки</h2>
+      <form id="habit-form" class="inline-form">
+        <label>Название<input type="text" id="habit-name" required /></label>
+        <label>Описание<input type="text" id="habit-description" /></label>
+        <label>Тип расписания
+          <select id="habit-schedule">
+            <option value="daily">Каждый день</option>
+            <option value="weekly">Каждую неделю</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <button type="submit">Сохранить</button>
+      </form>
+      <div class="list" id="habits-list"></div>
+    </section>
+
+    <section class="panel" id="reminders-panel" hidden>
+      <h2>4. Напоминания</h2>
+      <form id="reminder-form" class="inline-form">
+        <label>Дата<input type="date" id="reminder-date" required /></label>
+        <label>Время<input type="time" id="reminder-time" required /></label>
+        <label>Комментарий<input type="text" id="reminder-note" placeholder="Полить растения" /></label>
+        <button type="submit">Создать (time-based)</button>
+      </form>
+      <div class="list" id="reminders-list"></div>
+    </section>
+
+    <section class="panel" id="assistant-panel" hidden>
+      <h2>5. Ассистент</h2>
+      <form id="assistant-form" class="inline-form">
+        <label>Сообщение<input type="text" id="assistant-message" placeholder="Создай задачу завтра..." required /></label>
+        <button type="submit">Отправить</button>
+      </form>
+      <div class="list" id="assistant-history"></div>
+    </section>
+
+    <footer>
+      <p id="status">Готово</p>
+      <small>Исходники фронта лежат в <code>frontend/web/public</code>. API — <code>/api/v1</code>.</small>
+    </footer>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

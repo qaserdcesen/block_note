@@ -1,62 +1,75 @@
 ﻿# Contextual Task & Habit Manager
 
-Smart planner that mixes tasks, habits, reminders, and an LLM assistant. The repository is a monorepo: Python backend (FastAPI) plus placeholder clients (React Native + React web).
+Умный менеджер задач/привычек/напоминаний. Репозиторий организован как монорепо: FastAPI backend и два фронта (React Native заготовка + статичный web UI). Всё можно запустить локально без интеграций с LLM/погодой/геоданными.
 
-## Layout
-```
+## Структура
+`
 root/
-  backend/            # FastAPI app and service layer
-  frontend/mobile/    # Expo/React Native structure
-  frontend/web/       # Web client skeleton
-```
+  backend/            # FastAPI-приложение и бизнес-логика
+  frontend/mobile/    # Заготовка Expo/React Native (структура экранов)
+  frontend/web/
+    public/           # Готовый статичный демо-интерфейс (index.html + app.js)
+    src/              # React-компоненты/страницы для дальнейшего развития
+`
 
-Highlights:
-- `backend/app/api` — REST routers grouped by domain (auth, tasks, habits, reminders, assistant).
-- `backend/app/services` — business logic, assistants, context + notification abstractions.
-- `backend/app/models` — SQLAlchemy 2.x models with relationships and enums.
-- `backend/app/schemas` — Pydantic v2 DTOs (Base/Create/Update/Read).
-- `backend/app/core` — config loading, security helpers, scheduler, LLM client stub.
-- `backend/app/workers` — background jobs (reminders).
-- `frontend/mobile` — React Native screens/components for Today/Chat/Tasks/Habits/Reminders/Settings.
-- `frontend/web` — React pages/components for Today, tasks, habits, reminders, settings.
+Основные модули backend:
+- pp/api — REST-роуты по доменам (auth, tasks, habits, reminders, assistant).
+- pp/services — бизнес-логика, напоминания, уведомления, контекст.
+- pp/models — SQLAlchemy 2.x модели/enum/relations.
+- pp/schemas — Pydantic v2 DTO.
+- pp/core — конфигурация, безопасность, планировщик, stub клиента LLM.
+- pp/workers — фоновые задачи (проверка напоминаний).
 
-## Backend setup
-```bash
+## Настройка окружения
+`ash
 cd backend
 python -m venv .venv
 # Linux/macOS
-after the venv is created: source .venv/bin/activate
+source .venv/bin/activate
 # Windows PowerShell
-after the venv is created: .venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-cp .env.example .env  # set secrets and API keys
-```
+cp .env.example .env  # отредактируйте секреты/БД/таймзону
+`
 
-## Run backend
-```bash
+Что положить в .env:
+- APP_NAME, DATABASE_URL (по умолчанию SQLite data/app.db), JWT_SECRET_KEY, SCHEDULER_TIMEZONE.
+- Параметры LLM оставлены на будущее, но для демо не используются.
+
+## Запуск
+`ash
 cd backend
 uvicorn app.main:app --reload
-```
+`
 
-What happens on startup:
-1. FastAPI mounts `/api/v1/...` routers.
-2. SQLite schema is created via declarative metadata (easy to swap to PostgreSQL).
-3. APScheduler wires `workers.reminder_worker.check_and_fire_reminders` every 5 minutes.
+При старте:
+1. Создаются таблицы SQLite (путь ackend/data/app.db).
+2. Регистрируются API-роуты по адресу http://127.0.0.1:8000/api/v1/....
+3. Запускается APScheduler, который каждые 5 минут проверяет time-based напоминания.
+4. Монтируется статичный web UI (rontend/web/public) на /web и корневой / редиректит туда.
 
-## Typical flow
-1. `POST /api/v1/auth/register` — user creation (password hashed via `passlib[bcrypt]`).
-2. `POST /api/v1/auth/login` — receives JWT, required for all other routes.
-3. `GET/POST/PATCH/DELETE /api/v1/tasks` — CRUD with date filtering.
-4. `GET/POST/PATCH /api/v1/habits` + `/{habit_id}/logs` — recurrence management.
-5. `GET/POST/PATCH/DELETE /api/v1/reminders` — contextual reminder definitions.
-6. `POST /api/v1/assistant/message` — stores chat history, triggers rule-based intents, uses the LLM stub.
+## Как «увидеть» функционал
+1. После запуска откройте http://127.0.0.1:8000/ — простое SPA без сборки (HTML+JS).
+2. На вкладке «Регистрация и вход» создайте пользователя и выполните login (JWT хранится в localStorage).
+3. Блок «Задачи»: выберите дату, заведите задачи, отметьте как «Готово» или удалите — данные идут в /api/v1/tasks.
+4. Блок «Привычки»: создайте записи, смотрите список.
+5. Блок «Напоминания»: создайте time-based напоминание (scheduler будет обрабатывать каждую минуту запуска worker'а).
+6. Блок «Ассистент»: отправьте простые команды («создай задачу завтра...», «напомни через час») — rule-based сценарий создаст задачу или напоминание и вернёт ответ (без настоящего LLM).
 
-## Frontend scaffolds
-- **Mobile (React Native/Expo)** — Tab navigator with Today, Chat, Tasks, Habits, Reminders, Settings screens and simple list items.
-- **Web (React)** — Layout wrapper and placeholder pages for Today/tasks/habits/reminders/settings.
+## REST-эндоинты (если хотите работать через Postman/curl)
+1. POST /api/v1/auth/register — создать пользователя.
+2. POST /api/v1/auth/login — получить JWT.
+3. GET/POST/PATCH/DELETE /api/v1/tasks + ?date=YYYY-MM-DD.
+4. GET/POST/PATCH /api/v1/habits и GET/POST /api/v1/habits/{habit_id}/logs.
+5. GET/POST/PATCH/DELETE /api/v1/reminders.
+6. POST /api/v1/assistant/message — чат с rule-based ассистентом.
 
-## Next steps
-- Plug a real LLM SDK into `app/core/llm_client.py`.
-- Ship Alembic migrations + CI.
-- Expand context checks (geo/weather/behavior) inside `context_service` and the worker.
-- Flesh out API clients on mobile/web and add automated tests.
+## Фронтенды
+- **frontend/web/public** — минимальный runnable UI (HTML/CSS/JS), который общается с backend по AJAX.
+- **frontend/mobile/src** — структура экранов и компонентов для будущего Expo-приложения.
+- **frontend/web/src** — TypeScript-компоненты/страницы (можно перенести в Vite/Next проект).
+
+## Дальнейшие шаги
+- Подключить реальный LLM/внешние контексты в pp/core/llm_client.py и context_service.py.
+- Добавить миграции Alembic и автоматические тесты.
+- Развить полноценный React/React Native клиенты поверх REST API.
