@@ -1,7 +1,7 @@
 ﻿:root {
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   background: #f7f8fb;
-  color: #111;
+  color: #0f172a;
 }
 
 body {
@@ -14,25 +14,59 @@ header {
   padding: 2rem 0 1rem;
 }
 
+.nav {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.nav-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.5rem;
+  background: #e2e8f0;
+  color: #0f172a;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.nav-btn.active {
+  background: #2563eb;
+  color: #fff;
+}
+
+.nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto 1.5rem;
+}
+
 .panel {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 1.5rem;
-  margin: 1rem auto;
-  max-width: 960px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  margin-bottom: 1.25rem;
+  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.08);
 }
 
-.auth-forms {
+.forms-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
-form {
-  display: flex;
-  flex-direction: column;
+.inline-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 label {
@@ -59,12 +93,16 @@ button {
   transition: background 0.2s ease;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background: #1d4ed8;
 }
 
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .list {
-  margin-top: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -72,30 +110,58 @@ button:hover {
 
 .card {
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 0.9rem;
+  border-radius: 12px;
+  padding: 1rem;
   background: #fafbff;
 }
 
-.card .actions {
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.actions {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
   margin-top: 0.75rem;
 }
 
-.card .actions button {
-  flex: 0 0 auto;
-  background: #475569;
+.actions.stack {
+  flex-direction: column;
 }
 
-.card .actions button:last-child {
-  background: #ef4444;
+.completion-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .badge {
   background: #e0edff;
   padding: 0.1rem 0.4rem;
   border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.badge-neutral {
+  background: #f1f5f9;
+}
+
+.notice {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  color: #991b1b;
+}
+
+.status-hint {
+  text-align: center;
+  font-style: italic;
 }
 
 footer {

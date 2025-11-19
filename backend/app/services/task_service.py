@@ -1,11 +1,11 @@
 ﻿from datetime import date, datetime, time
-from typing import List
+from typing import Any, List
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.task import Task
+from app.models.task import CompletionMode, Task, TaskStatus
 from app.schemas.task import TaskCreate, TaskUpdate
 
 
@@ -23,10 +23,30 @@ def list_tasks_for_date(db: Session, user_id: int, day: date) -> List[Task]:
     return list(db.execute(stmt).scalars().all())
 
 
+def _normalize_completion(payload: dict[str, Any], fallback_mode: CompletionMode | None = None) -> None:
+    mode = payload.get("completion_mode") or fallback_mode
+    if mode is None:
+        return
+    raw_value = payload.get("completion_value", 0)
+    status = payload.get("status")
+
+    if mode == CompletionMode.BINARY:
+        if status == TaskStatus.DONE:
+            payload["completion_value"] = 100
+        elif status in {TaskStatus.PENDING, TaskStatus.CANCELLED}:
+            payload["completion_value"] = 0
+        else:
+            payload["completion_value"] = 100 if raw_value and int(raw_value) >= 100 else 0
+    else:
+        payload["completion_value"] = max(0, min(100, int(raw_value)))
+
+
 def create_task(db: Session, data: TaskCreate) -> Task:
     if data.user_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required")
-    task = Task(**data.model_dump())
+    payload = data.model_dump()
+    _normalize_completion(payload)
+    task = Task(**payload)
     db.add(task)
     db.commit()
     db.refresh(task)
@@ -38,7 +58,9 @@ def update_task(db: Session, task_id: int, user_id: int, data: TaskUpdate) -> Ta
     if not task or task.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-    for key, value in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    _normalize_completion(payload, fallback_mode=task.completion_mode)
+    for key, value in payload.items():
         setattr(task, key, value)
     db.commit()
     db.refresh(task)
@@ -51,4 +73,3 @@ def delete_task(db: Session, task_id: int, user_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     db.delete(task)
     db.commit()
-

@@ -1,15 +1,17 @@
 ﻿const apiBase = "/api/v1";
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
 const state = {
   token: localStorage.getItem("cthm_token"),
+  currentPage: "auth-page",
   assistantHistory: [],
+  habitStatuses: {},
 };
 
 const statusEl = document.getElementById("status");
 const currentUserEl = document.getElementById("current-user");
-const tasksPanel = document.getElementById("tasks-panel");
-const habitsPanel = document.getElementById("habits-panel");
-const remindersPanel = document.getElementById("reminders-panel");
-const assistantPanel = document.getElementById("assistant-panel");
+const workspaceGuard = document.getElementById("workspace-guard");
+const assistantGuard = document.getElementById("assistant-guard");
 const tasksList = document.getElementById("tasks-list");
 const habitsList = document.getElementById("habits-list");
 const remindersList = document.getElementById("reminders-list");
@@ -17,6 +19,13 @@ const assistantHistoryEl = document.getElementById("assistant-history");
 const tasksDateInput = document.getElementById("tasks-date");
 const reminderDate = document.getElementById("reminder-date");
 const reminderTime = document.getElementById("reminder-time");
+const navButtons = Array.from(document.querySelectorAll(".nav-btn"));
+
+const pages = {
+  "auth-page": document.getElementById("auth-page"),
+  "workspace-page": document.getElementById("workspace-page"),
+  "assistant-page": document.getElementById("assistant-page"),
+};
 
 const today = new Date().toISOString().slice(0, 10);
 tasksDateInput.value = today;
@@ -28,13 +37,59 @@ function setStatus(message, type = "info") {
   statusEl.dataset.type = type;
 }
 
+function switchPage(targetId) {
+  const button = navButtons.find((btn) => btn.dataset.target === targetId);
+  const requiresAuth = button?.dataset.requiresAuth === "true";
+  if (requiresAuth && !state.token) {
+    setStatus("Авторизуйтесь, чтобы открыть этот раздел", "error");
+    targetId = "auth-page";
+  }
+  state.currentPage = targetId;
+  Object.entries(pages).forEach(([id, element]) => {
+    element.hidden = id !== targetId;
+  });
+  navButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.target === targetId);
+    if (btn.dataset.requiresAuth === "true") {
+      btn.disabled = !state.token;
+    }
+  });
+  updateGuards();
+}
+
+function updateGuards() {
+  const loggedIn = Boolean(state.token);
+  workspaceGuard.hidden = loggedIn;
+  assistantGuard.hidden = loggedIn;
+  if (!loggedIn && state.currentPage !== "auth-page") {
+    switchPage("auth-page");
+  }
+}
+
 function updatePanels() {
   const loggedIn = Boolean(state.token);
-  tasksPanel.hidden = !loggedIn;
-  habitsPanel.hidden = !loggedIn;
-  remindersPanel.hidden = !loggedIn;
-  assistantPanel.hidden = !loggedIn;
   currentUserEl.textContent = loggedIn ? "Авторизация успешна" : "Не авторизованы";
+  navButtons.forEach((btn) => {
+    if (btn.dataset.requiresAuth === "true") {
+      btn.disabled = !loggedIn;
+    }
+  });
+  updateGuards();
+}
+
+navButtons.forEach((btn) => {
+  btn.addEventListener("click", () => switchPage(btn.dataset.target));
+});
+
+function formatCompletionValue(mode, value) {
+  const numeric = Number(value) || 0;
+  return mode === "binary" ? (numeric >= 100 ? 100 : 0) : clamp(numeric, 0, 100);
+}
+
+function syncCompletionInput(modeSelect, valueInput) {
+  const normalized = formatCompletionValue(modeSelect.value, valueInput.value);
+  valueInput.value = normalized;
+  valueInput.step = modeSelect.value === "binary" ? 100 : 5;
 }
 
 async function handleRegister(event) {
@@ -67,6 +122,7 @@ async function handleLogin(event) {
     localStorage.setItem("cthm_token", state.token);
     setStatus("Авторизация успешна", "success");
     updatePanels();
+    switchPage("workspace-page");
     await refreshAll();
   } catch (error) {
     state.token = null;
@@ -98,13 +154,13 @@ async function fetchJson(url, options = {}) {
   }
 
   if (!response.ok) {
-    const message = (data && data.detail) || response.statusText;
+    const message = (data && data.detail) || response.statusText || "Ошибка запроса";
     if (response.status === 401) {
       state.token = null;
       localStorage.removeItem("cthm_token");
       updatePanels();
     }
-    throw new Error(message || "Request failed");
+    throw new Error(message);
   }
   return data;
 }
@@ -119,9 +175,20 @@ async function handleCreateTask(event) {
   event.preventDefault();
   const title = document.getElementById("task-title").value;
   const description = document.getElementById("task-description").value;
-  const priority = Number(document.getElementById("task-priority").value);
+  const priority = Number(document.getElementById("task-priority").value) || 1;
+  const completionMode = document.getElementById("task-completion-mode").value;
+  const completionValueInput = document.getElementById("task-completion-value");
+  const completionValue = formatCompletionValue(completionMode, completionValueInput.value);
+  completionValueInput.value = completionValue;
   const due = isoFromDateTime(tasksDateInput.value, document.getElementById("task-time").value);
-  const payload = { title, description, priority, due_datetime: due };
+  const payload = {
+    title,
+    description,
+    priority,
+    due_datetime: due,
+    completion_mode: completionMode,
+    completion_value: completionValue,
+  };
   try {
     await apiFetch("/tasks", { method: "POST", body: JSON.stringify(payload) });
     document.getElementById("task-title").value = "";
@@ -148,37 +215,82 @@ async function loadTasks() {
 function renderTasks(tasks) {
   tasksList.innerHTML = "";
   if (!tasks.length) {
-    tasksList.innerHTML = "<p>Нет задач</p>";
+    tasksList.innerHTML = "<p>Нет задач на выбранную дату</p>";
     return;
   }
 
   tasks.forEach((task) => {
     const card = document.createElement("article");
     card.className = "card";
-    card.innerHTML = `<div><strong>${task.title}</strong><p>${task.description || ""}</p></div>
-      <p>Статус: <span class="badge">${task.status}</span> | Приоритет: ${task.priority}</p>`;
+    card.innerHTML = `
+      <header class="card-header">
+        <div>
+          <strong>${task.title}</strong>
+          <p>${task.description || "Без описания"}</p>
+        </div>
+        <span class="badge">Приоритет ${task.priority}</span>
+      </header>
+      <p>Статус: <span class="badge badge-neutral">${task.status}</span></p>
+      <p>Прогресс: ${task.completion_mode === "percent" ? `${task.completion_value}%` : task.completion_value >= 100 ? "Выполнено" : "Не выполнено"}</p>
+    `;
 
     const controls = document.createElement("div");
-    controls.className = "actions";
+    controls.className = "actions stack";
 
-    const doneBtn = document.createElement("button");
-    doneBtn.textContent = "Готово";
-    doneBtn.onclick = () => updateTask(task.id, { status: "done" });
-    controls.appendChild(doneBtn);
+    const completionControls = document.createElement("div");
+    completionControls.className = "completion-controls";
+
+    const modeSelect = document.createElement("select");
+    [
+      { value: "binary", label: "Бинарно" },
+      { value: "percent", label: "Процент" },
+    ].forEach((option) => {
+      const opt = document.createElement("option");
+      opt.value = option.value;
+      opt.textContent = option.label;
+      if (task.completion_mode === option.value) opt.selected = true;
+      modeSelect.appendChild(opt);
+    });
+
+    const valueInput = document.createElement("input");
+    valueInput.type = "number";
+    valueInput.min = 0;
+    valueInput.max = 100;
+    valueInput.value = task.completion_value;
+    syncCompletionInput(modeSelect, valueInput);
+    modeSelect.addEventListener("change", () => syncCompletionInput(modeSelect, valueInput));
+
+    const applyButton = document.createElement("button");
+    applyButton.type = "button";
+    applyButton.textContent = "Обновить прогресс";
+    applyButton.onclick = () => updateTaskCompletion(task.id, modeSelect.value, valueInput.value);
+
+    completionControls.append(modeSelect, valueInput, applyButton);
+
+    const doneButton = document.createElement("button");
+    doneButton.type = "button";
+    doneButton.textContent = "Отметить выполненной";
+    doneButton.onclick = () => updateTaskCompletion(task.id, "binary", 100);
 
     const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
     deleteBtn.textContent = "Удалить";
     deleteBtn.onclick = () => deleteTask(task.id);
-    controls.appendChild(deleteBtn);
 
+    controls.append(completionControls, doneButton, deleteBtn);
     card.appendChild(controls);
     tasksList.appendChild(card);
   });
 }
 
-async function updateTask(id, payload) {
+async function updateTaskCompletion(taskId, mode, value) {
   try {
-    await apiFetch(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+    const completion_value = formatCompletionValue(mode, value);
+    await apiFetch(`/tasks/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ completion_mode: mode, completion_value }),
+    });
+    setStatus("Прогресс задачи обновлён", "success");
     await loadTasks();
   } catch (error) {
     setStatus(error.message, "error");
@@ -200,8 +312,14 @@ async function handleCreateHabit(event) {
     name: document.getElementById("habit-name").value,
     description: document.getElementById("habit-description").value,
     schedule_type: document.getElementById("habit-schedule").value,
+    completion_mode: document.getElementById("habit-completion-mode").value,
+    completion_value: formatCompletionValue(
+      document.getElementById("habit-completion-mode").value,
+      document.getElementById("habit-completion-value").value
+    ),
     is_active: true,
   };
+  document.getElementById("habit-completion-value").value = payload.completion_value;
   try {
     await apiFetch("/habits", { method: "POST", body: JSON.stringify(payload) });
     document.getElementById("habit-name").value = "";
@@ -217,11 +335,33 @@ async function loadHabits() {
   if (!state.token) return;
   try {
     const habits = await apiFetch("/habits");
+    await loadHabitStatuses(habits);
     renderHabits(habits);
   } catch (error) {
     renderHabits([]);
     setStatus(error.message, "error");
   }
+}
+
+async function loadHabitStatuses(habits) {
+  const entries = await Promise.all(
+    habits.map(async (habit) => {
+      try {
+        const logs = await apiFetch(`/habits/${habit.id}/logs`);
+        return [habit.id, logs?.[0] || null];
+      } catch (error) {
+        setStatus(error.message, "error");
+        return [habit.id, null];
+      }
+    })
+  );
+  state.habitStatuses = Object.fromEntries(entries);
+}
+
+function habitStatusText(habitId) {
+  const log = state.habitStatuses[habitId];
+  if (!log) return "Нет отметок";
+  return `${log.status === "done" ? "Выполнено" : "Пропущено"} (${log.date})`;
 }
 
 function renderHabits(habits) {
@@ -230,14 +370,95 @@ function renderHabits(habits) {
     habitsList.innerHTML = "<p>Нет привычек</p>";
     return;
   }
+
   habits.forEach((habit) => {
     const card = document.createElement("article");
     card.className = "card";
-    card.innerHTML = `<strong>${habit.name}</strong>
-      <p>${habit.description || ""}</p>
-      <p>Тип: ${habit.schedule_type}</p>`;
+    card.innerHTML = `
+      <header class="card-header">
+        <div>
+          <strong>${habit.name}</strong>
+          <p>${habit.description || "Без описания"}</p>
+        </div>
+        <span class="badge">${habit.schedule_type}</span>
+      </header>
+      <p>Статус выполнения: ${habitStatusText(habit.id)}</p>
+      <p>Режим отметки: ${habit.completion_mode === "percent" ? "Процент" : "Выполнил / не выполнил"}</p>
+      <p>Текущее значение: ${habit.completion_mode === "percent" ? `${habit.completion_value}%` : habit.completion_value >= 100 ? "Выполнено" : "Не выполнено"}</p>
+    `;
+
+    const controls = document.createElement("div");
+    controls.className = "actions stack";
+
+    const completionControls = document.createElement("div");
+    completionControls.className = "completion-controls";
+    const modeSelect = document.createElement("select");
+    [
+      { value: "binary", label: "Бинарно" },
+      { value: "percent", label: "Процент" },
+    ].forEach((option) => {
+      const opt = document.createElement("option");
+      opt.value = option.value;
+      opt.textContent = option.label;
+      if (habit.completion_mode === option.value) opt.selected = true;
+      modeSelect.appendChild(opt);
+    });
+    const valueInput = document.createElement("input");
+    valueInput.type = "number";
+    valueInput.min = 0;
+    valueInput.max = 100;
+    valueInput.value = habit.completion_value;
+    syncCompletionInput(modeSelect, valueInput);
+    modeSelect.addEventListener("change", () => syncCompletionInput(modeSelect, valueInput));
+
+    const applyButton = document.createElement("button");
+    applyButton.type = "button";
+    applyButton.textContent = "Обновить прогресс";
+    applyButton.onclick = () => updateHabitCompletion(habit.id, modeSelect.value, valueInput.value);
+
+    completionControls.append(modeSelect, valueInput, applyButton);
+
+    const doneBtn = document.createElement("button");
+    doneBtn.type = "button";
+    doneBtn.textContent = "Отметить выполнено сегодня";
+    doneBtn.onclick = () => logHabitStatus(habit.id, "done");
+
+    const skipBtn = document.createElement("button");
+    skipBtn.type = "button";
+    skipBtn.textContent = "Отметить пропуск";
+    skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
+
+    controls.append(completionControls, doneBtn, skipBtn);
+    card.appendChild(controls);
     habitsList.appendChild(card);
   });
+}
+
+async function updateHabitCompletion(habitId, mode, value) {
+  try {
+    const completion_value = formatCompletionValue(mode, value);
+    await apiFetch(`/habits/${habitId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ completion_mode: mode, completion_value }),
+    });
+    setStatus("Прогресс привычки обновлён", "success");
+    await loadHabits();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function logHabitStatus(habitId, status) {
+  try {
+    await apiFetch(`/habits/${habitId}/logs`, {
+      method: "POST",
+      body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), status }),
+    });
+    setStatus("Статус привычки записан", "success");
+    await loadHabits();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
 }
 
 async function handleCreateReminder(event) {
@@ -304,12 +525,20 @@ async function deleteReminder(id) {
 
 async function handleAssistant(event) {
   event.preventDefault();
+  if (!state.token) {
+    setStatus("Авторизуйтесь для доступа к ассистенту", "error");
+    switchPage("auth-page");
+    return;
+  }
   const messageInput = document.getElementById("assistant-message");
   const message = messageInput.value.trim();
   if (!message) return;
   messageInput.value = "";
   try {
-    const response = await apiFetch("/assistant/message", { method: "POST", body: JSON.stringify({ user_message: message }) });
+    const response = await apiFetch("/assistant/message", {
+      method: "POST",
+      body: JSON.stringify({ user_message: message }),
+    });
     state.assistantHistory.unshift({ user: message, reply: response.reply, ts: new Date().toLocaleTimeString() });
     renderAssistantHistory();
   } catch (error) {
@@ -339,6 +568,18 @@ async function refreshAll() {
   await Promise.all([loadTasks(), loadHabits(), loadReminders()]);
 }
 
+const taskModeSelect = document.getElementById("task-completion-mode");
+const taskCompletionValue = document.getElementById("task-completion-value");
+const habitModeSelect = document.getElementById("habit-completion-mode");
+const habitCompletionValue = document.getElementById("habit-completion-value");
+
+if (taskModeSelect && taskCompletionValue) {
+  taskModeSelect.addEventListener("change", () => syncCompletionInput(taskModeSelect, taskCompletionValue));
+}
+if (habitModeSelect && habitCompletionValue) {
+  habitModeSelect.addEventListener("change", () => syncCompletionInput(habitModeSelect, habitCompletionValue));
+}
+
 // Инициализация обработчиков
 document.getElementById("register-form").addEventListener("submit", handleRegister);
 document.getElementById("login-form").addEventListener("submit", handleLogin);
@@ -349,6 +590,7 @@ document.getElementById("assistant-form").addEventListener("submit", handleAssis
 tasksDateInput.addEventListener("change", loadTasks);
 
 updatePanels();
+switchPage(state.currentPage);
 if (state.token) {
   refreshAll();
 }

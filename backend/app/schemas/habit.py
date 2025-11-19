@@ -1,9 +1,9 @@
 ﻿from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.habit import HabitLogStatus, HabitSchedule
+from app.models.habit import HabitCompletionMode, HabitLogStatus, HabitSchedule
 
 
 class HabitBase(BaseModel):
@@ -12,6 +12,8 @@ class HabitBase(BaseModel):
     schedule_type: HabitSchedule
     schedule_config: Optional[dict] = None
     is_active: bool = True
+    completion_mode: HabitCompletionMode = HabitCompletionMode.BINARY
+    completion_value: int = Field(0, ge=0, le=100)
 
 
 class HabitCreate(HabitBase):
@@ -24,6 +26,8 @@ class HabitUpdate(BaseModel):
     schedule_type: Optional[HabitSchedule] = None
     schedule_config: Optional[dict] = None
     is_active: Optional[bool] = None
+    completion_mode: Optional[HabitCompletionMode] = None
+    completion_value: Optional[int] = Field(None, ge=0, le=100)
 
 
 class HabitRead(HabitBase):

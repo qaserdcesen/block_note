@@ -2,7 +2,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.habit import Habit, HabitLog
+from app.models.habit import Habit, HabitCompletionMode, HabitLog
 from app.schemas.habit import HabitCreate, HabitLogCreate, HabitUpdate
 
 
@@ -11,10 +11,20 @@ def list_habits(db: Session, user_id: int) -> list[Habit]:
     return list(db.execute(stmt).scalars().all())
 
 
+def _normalize_completion(payload: dict, fallback_mode: HabitCompletionMode | None = None) -> None:
+    mode = payload.get("completion_mode") or fallback_mode
+    if mode is None:
+        return
+    raw_value = payload.get("completion_value", 0)
+    payload["completion_value"] = max(0, min(100, int(raw_value))) if mode == HabitCompletionMode.PERCENT else (100 if raw_value and int(raw_value) >= 100 else 0)
+
+
 def create_habit(db: Session, data: HabitCreate) -> Habit:
     if data.user_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required")
-    habit = Habit(**data.model_dump())
+    payload = data.model_dump()
+    _normalize_completion(payload)
+    habit = Habit(**payload)
     db.add(habit)
     db.commit()
     db.refresh(habit)
@@ -25,7 +35,9 @@ def update_habit(db: Session, habit_id: int, user_id: int, data: HabitUpdate) ->
     habit = db.get(Habit, habit_id)
     if not habit or habit.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Habit not found")
-    for key, value in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    _normalize_completion(payload, fallback_mode=habit.completion_mode)
+    for key, value in payload.items():
         setattr(habit, key, value)
     db.commit()
     db.refresh(habit)
@@ -49,4 +61,3 @@ def add_habit_log(db: Session, habit_id: int, user_id: int, payload: HabitLogCre
     db.commit()
     db.refresh(log)
     return log
-

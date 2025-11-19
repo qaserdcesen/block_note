@@ -9,14 +9,22 @@
   <body>
     <header>
       <h1>Contextual Task & Habit Manager</h1>
-      <p>Минимальный демо-интерфейс поверх FastAPI backend (без LLM и внешних API).</p>
+      <p>
+        Минимальный демо-интерфейс: раздел авторизации, рабочая панель (задачи/привычки/напоминания) и
+        страница ассистента. Все данные хранятся в локальной SQLite через FastAPI.
+      </p>
     </header>
 
-    <section class="panel" id="auth-panel">
-      <h2>1. Регистрация и вход</h2>
-      <div class="auth-forms">
+    <nav class="nav">
+      <button class="nav-btn active" data-target="auth-page">Авторизация</button>
+      <button class="nav-btn" data-target="workspace-page" data-requires-auth="true">Задачи / Привычки / Напоминания</button>
+      <button class="nav-btn" data-target="assistant-page" data-requires-auth="true">Ассистент</button>
+    </nav>
+
+    <section class="page" id="auth-page">
+      <div class="panel forms-grid">
         <form id="register-form">
-          <h3>Регистрация</h3>
+          <h2>Регистрация</h2>
           <label>E-mail<input type="email" name="email" required /></label>
           <label>Пароль<input type="password" name="password" required /></label>
           <label>Часовой пояс<input type="text" name="timezone" value="Europe/Moscow" /></label>
@@ -24,74 +32,89 @@
           <button type="submit">Создать</button>
         </form>
         <form id="login-form">
-          <h3>Вход</h3>
+          <h2>Вход</h2>
           <label>E-mail<input type="email" name="email" required /></label>
           <label>Пароль<input type="password" name="password" required /></label>
           <button type="submit">Войти</button>
         </form>
       </div>
-      <p id="current-user">Не авторизованы</p>
+      <p id="current-user" class="status-hint">Не авторизованы</p>
     </section>
 
-    <section class="panel" id="tasks-panel" hidden>
-      <h2>2. Задачи</h2>
-      <form id="task-form" class="inline-form">
-        <label>Дата<input type="date" id="tasks-date" required /></label>
-        <label>Время<input type="time" id="task-time" /></label>
-        <label>Заголовок<input type="text" id="task-title" required /></label>
-        <label>Описание<input type="text" id="task-description" /></label>
-        <label>Приоритет
-          <select id="task-priority">
-            <option value="1">1</option>
-            <option value="2" selected>2</option>
-            <option value="3">3</option>
-          </select>
-        </label>
-        <button type="submit">Добавить</button>
-      </form>
-      <div class="list" id="tasks-list"></div>
+    <section class="page" id="workspace-page" hidden>
+      <p id="workspace-guard" class="notice" hidden>Авторизуйтесь, чтобы управлять задачами и привычками.</p>
+
+      <article class="panel" id="tasks-section">
+        <h2>Задачи</h2>
+        <form id="task-form" class="inline-form">
+          <label>Дата<input type="date" id="tasks-date" required /></label>
+          <label>Время<input type="time" id="task-time" /></label>
+          <label>Заголовок<input type="text" id="task-title" required /></label>
+          <label>Описание<input type="text" id="task-description" /></label>
+          <label>Приоритет (1–10)<input type="number" id="task-priority" min="1" max="10" value="5" /></label>
+          <label>Способ отметки
+            <select id="task-completion-mode">
+              <option value="binary">Выполнил/не выполнил</option>
+              <option value="percent">Процент</option>
+            </select>
+          </label>
+          <label>Значение выполнения (0–100)<input type="number" id="task-completion-value" min="0" max="100" value="0" /></label>
+          <button type="submit">Добавить задачу</button>
+        </form>
+        <div class="list" id="tasks-list"></div>
+      </article>
+
+      <article class="panel" id="habits-section">
+        <h2>Привычки</h2>
+        <form id="habit-form" class="inline-form">
+          <label>Название<input type="text" id="habit-name" required /></label>
+          <label>Описание<input type="text" id="habit-description" /></label>
+          <label>Тип расписания
+            <select id="habit-schedule">
+              <option value="daily">Каждый день</option>
+              <option value="weekly">Каждую неделю</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label>Способ отметки
+            <select id="habit-completion-mode">
+              <option value="binary">Выполнил/не выполнил</option>
+              <option value="percent">Процент</option>
+            </select>
+          </label>
+          <label>Значение выполнения (0–100)<input type="number" id="habit-completion-value" min="0" max="100" value="0" /></label>
+          <button type="submit">Сохранить привычку</button>
+        </form>
+        <div class="list" id="habits-list"></div>
+      </article>
+
+      <article class="panel" id="reminders-section">
+        <h2>Напоминания</h2>
+        <form id="reminder-form" class="inline-form">
+          <label>Дата<input type="date" id="reminder-date" required /></label>
+          <label>Время<input type="time" id="reminder-time" required /></label>
+          <label>Комментарий<input type="text" id="reminder-note" placeholder="Полить растения" /></label>
+          <button type="submit">Создать таймер</button>
+        </form>
+        <div class="list" id="reminders-list"></div>
+      </article>
     </section>
 
-    <section class="panel" id="habits-panel" hidden>
-      <h2>3. Привычки</h2>
-      <form id="habit-form" class="inline-form">
-        <label>Название<input type="text" id="habit-name" required /></label>
-        <label>Описание<input type="text" id="habit-description" /></label>
-        <label>Тип расписания
-          <select id="habit-schedule">
-            <option value="daily">Каждый день</option>
-            <option value="weekly">Каждую неделю</option>
-            <option value="custom">Custom</option>
-          </select>
-        </label>
-        <button type="submit">Сохранить</button>
-      </form>
-      <div class="list" id="habits-list"></div>
-    </section>
-
-    <section class="panel" id="reminders-panel" hidden>
-      <h2>4. Напоминания</h2>
-      <form id="reminder-form" class="inline-form">
-        <label>Дата<input type="date" id="reminder-date" required /></label>
-        <label>Время<input type="time" id="reminder-time" required /></label>
-        <label>Комментарий<input type="text" id="reminder-note" placeholder="Полить растения" /></label>
-        <button type="submit">Создать (time-based)</button>
-      </form>
-      <div class="list" id="reminders-list"></div>
-    </section>
-
-    <section class="panel" id="assistant-panel" hidden>
-      <h2>5. Ассистент</h2>
-      <form id="assistant-form" class="inline-form">
-        <label>Сообщение<input type="text" id="assistant-message" placeholder="Создай задачу завтра..." required /></label>
-        <button type="submit">Отправить</button>
-      </form>
-      <div class="list" id="assistant-history"></div>
+    <section class="page" id="assistant-page" hidden>
+      <p id="assistant-guard" class="notice" hidden>Авторизуйтесь, чтобы общаться с ассистентом.</p>
+      <article class="panel">
+        <h2>Ассистент</h2>
+        <form id="assistant-form" class="inline-form">
+          <label>Сообщение ассистенту<input type="text" id="assistant-message" placeholder="Создай задачу завтра..." required /></label>
+          <button type="submit">Отправить</button>
+        </form>
+        <div class="list" id="assistant-history"></div>
+      </article>
     </section>
 
     <footer>
       <p id="status">Готово</p>
-      <small>Исходники фронта лежат в <code>frontend/web/public</code>. API — <code>/api/v1</code>.</small>
+      <small>Исходники фронта: <code>frontend/web/public</code>. API: <code>/api/v1</code>.</small>
     </footer>
 
     <script type="module" src="./app.js"></script>

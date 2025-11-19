@@ -19,6 +19,11 @@ class HabitLogStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+class HabitCompletionMode(str, Enum):
+    BINARY = "binary"
+    PERCENT = "percent"
+
+
 class Habit(Base):
     __tablename__ = "habits"
 
@@ -29,6 +34,10 @@ class Habit(Base):
     schedule_type: Mapped[HabitSchedule] = mapped_column(SAEnum(HabitSchedule), nullable=False)
     schedule_config: Mapped[dict | None] = mapped_column(JSON)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    completion_mode: Mapped[HabitCompletionMode] = mapped_column(
+        SAEnum(HabitCompletionMode), default=HabitCompletionMode.BINARY, nullable=False
+    )
+    completion_value: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

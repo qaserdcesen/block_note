@@ -15,6 +15,11 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class CompletionMode(str, Enum):
+    BINARY = "binary"
+    PERCENT = "percent"
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -25,6 +30,10 @@ class Task(Base):
     due_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     status: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus), default=TaskStatus.PENDING, nullable=False)
     priority: Mapped[int] = mapped_column(Integer, default=2)
+    completion_mode: Mapped[CompletionMode] = mapped_column(
+        SAEnum(CompletionMode), default=CompletionMode.BINARY, nullable=False
+    )
+    completion_value: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
