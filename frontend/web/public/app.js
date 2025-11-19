@@ -6,6 +6,7 @@ const state = {
   currentPage: "auth-page",
   assistantHistory: [],
   habitStatuses: {},
+  userTimezone: localStorage.getItem("cthm_timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
 };
 
 const statusEl = document.getElementById("status");
@@ -103,6 +104,10 @@ async function handleRegister(event) {
   };
   try {
     await fetchJson(`${apiBase}/auth/register`, { method: "POST", body: JSON.stringify(payload) });
+    if (payload.timezone) {
+      state.userTimezone = payload.timezone;
+      localStorage.setItem("cthm_timezone", payload.timezone);
+    }
     setStatus("Пользователь создан, теперь выполните вход", "success");
   } catch (error) {
     setStatus(error.message, "error");
@@ -167,8 +172,7 @@ async function fetchJson(url, options = {}) {
 
 function isoFromDateTime(date, time) {
   if (!date) return null;
-  const isoString = new Date(`${date}T${time || "00:00"}:00`).toISOString();
-  return isoString;
+  return `${date}T${time || "00:00"}:00`;
 }
 
 async function handleCreateTask(event) {
@@ -358,10 +362,28 @@ async function loadHabitStatuses(habits) {
   state.habitStatuses = Object.fromEntries(entries);
 }
 
-function habitStatusText(habitId) {
-  const log = state.habitStatuses[habitId];
-  if (!log) return "Нет отметок";
-  return `${log.status === "done" ? "Выполнено" : "Пропущено"} (${log.date})`;
+function habitStatusText(habit) {
+  const log = state.habitStatuses[habit.id];
+  let label = "Нет отметок";
+
+  if (habit.completion_mode === "percent") {
+    if (habit.completion_value >= 100) {
+      label = "Выполнено";
+    } else if (habit.completion_value <= 0) {
+      label = "Не выполнено";
+    } else {
+      label = `${habit.completion_value}%`;
+    }
+  } else if (log) {
+    label = log.status === "done" ? "Выполнено" : "Пропущено";
+  } else {
+    label = habit.completion_value >= 100 ? "Выполнено" : "Не выполнено";
+  }
+
+  if (habit.schedule_type === "weekly" && log) {
+    return `${label} (${log.date})`;
+  }
+  return label;
 }
 
 function renderHabits(habits) {
@@ -382,7 +404,7 @@ function renderHabits(habits) {
         </div>
         <span class="badge">${habit.schedule_type}</span>
       </header>
-      <p>Статус выполнения: ${habitStatusText(habit.id)}</p>
+      <p>Статус выполнения: ${habitStatusText(habit)}</p>
       <p>Режим отметки: ${habit.completion_mode === "percent" ? "Процент" : "Выполнил / не выполнил"}</p>
       <p>Текущее значение: ${habit.completion_mode === "percent" ? `${habit.completion_value}%` : habit.completion_value >= 100 ? "Выполнено" : "Не выполнено"}</p>
     `;
@@ -468,7 +490,7 @@ async function handleCreateReminder(event) {
   const payload = {
     type: "time",
     trigger_time: trigger,
-    trigger_timezone: "UTC",
+    trigger_timezone: state.userTimezone || "UTC",
     is_active: true,
     behavior_rule: note,
   };
@@ -594,3 +616,5 @@ switchPage(state.currentPage);
 if (state.token) {
   refreshAll();
 }
+
+

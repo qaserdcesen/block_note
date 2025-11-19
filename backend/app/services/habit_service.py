@@ -2,7 +2,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.habit import Habit, HabitCompletionMode, HabitLog
+from app.models.habit import Habit, HabitCompletionMode, HabitLog, HabitLogStatus
 from app.schemas.habit import HabitCreate, HabitLogCreate, HabitUpdate
 
 
@@ -58,6 +58,10 @@ def add_habit_log(db: Session, habit_id: int, user_id: int, payload: HabitLogCre
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Habit not found")
     log = HabitLog(habit_id=habit_id, user_id=user_id, **payload.model_dump())
     db.add(log)
+    if payload.status == HabitLogStatus.DONE:
+        habit.completion_value = 100
+    else:
+        habit.completion_value = 0
     db.commit()
     db.refresh(log)
     return log
