@@ -1,121 +1,179 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Contextual Task & Habit Manager — Demo</title>
+    <title>Contextual Planner · Telegram Mini App</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
-    <header>
-      <h1>Contextual Task & Habit Manager</h1>
-      <p>
-        Минимальный демо-интерфейс: раздел авторизации, рабочая панель (задачи/привычки/напоминания) и
-        страница ассистента. Все данные хранятся в локальной SQLite через FastAPI.
-      </p>
-    </header>
+    <div class="app-shell">
+      <header class="hero">
+        <div class="hero__title">
+          <p class="eyebrow">Telegram Mini App</p>
+          <h1>Contextual Planner</h1>
+          <p class="subtitle">
+            Управляйте задачами, привычками и напоминаниями прямо из Telegram. Тот же backend и REST API, но оболочка —
+            под WebApp.
+          </p>
+        </div>
+        <div class="hero__badges">
+          <span class="pill" id="current-user">Гость</span>
+          <span class="pill pill-ghost" id="timezone-indicator">UTC</span>
+        </div>
+      </header>
 
-    <nav class="nav">
-      <button class="nav-btn active" data-target="auth-page">Авторизация</button>
-      <button class="nav-btn" data-target="workspace-page" data-requires-auth="true">Задачи / Привычки / Напоминания</button>
-      <button class="nav-btn" data-target="assistant-page" data-requires-auth="true">Ассистент</button>
-    </nav>
+      <div class="status-banner" id="status" aria-live="polite" data-type="info">Готово</div>
 
-    <section class="page" id="auth-page">
-      <div class="panel forms-grid">
-        <form id="register-form">
-          <h2>Регистрация</h2>
-          <label>E-mail<input type="email" name="email" required /></label>
-          <label>Пароль<input type="password" name="password" required /></label>
-          <label>Часовой пояс<input type="text" name="timezone" value="Europe/Moscow" /></label>
-          <label>Язык<input type="text" name="language" value="ru" /></label>
-          <button type="submit">Создать</button>
-        </form>
-        <form id="login-form">
-          <h2>Вход</h2>
-          <label>E-mail<input type="email" name="email" required /></label>
-          <label>Пароль<input type="password" name="password" required /></label>
-          <button type="submit">Войти</button>
-        </form>
-      </div>
-      <p id="current-user" class="status-hint">Не авторизованы</p>
-    </section>
+      <main class="pages">
+        <section class="page" id="auth-page">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">Доступ</p>
+              <h2>Вход или регистрация</h2>
+              <p class="muted">Mini App работает как Web клиент: токен лежит в localStorage и будет использован для API.</p>
+            </div>
+            <div class="chip-stack">
+              <span class="chip">JWT хранится локально</span>
+              <span class="chip">API: /api/v1</span>
+            </div>
+          </div>
+          <div class="card-grid">
+            <form id="register-form" class="card form-card">
+              <header>
+                <p class="eyebrow">Нужен новый профиль?</p>
+                <h3>Зарегистрироваться</h3>
+              </header>
+              <label>E-mail<input type="email" name="email" required /></label>
+              <label>Пароль<input type="password" name="password" required /></label>
+              <label>Часовой пояс<input type="text" name="timezone" value="Europe/Moscow" /></label>
+              <label>Язык<input type="text" name="language" value="ru" /></label>
+              <button type="submit">Создать аккаунт</button>
+            </form>
+            <form id="login-form" class="card form-card">
+              <header>
+                <p class="eyebrow">Уже есть доступ?</p>
+                <h3>Войти</h3>
+              </header>
+              <label>E-mail<input type="email" name="email" required /></label>
+              <label>Пароль<input type="password" name="password" required /></label>
+              <button type="submit">Войти</button>
+            </form>
+          </div>
+        </section>
 
-    <section class="page" id="workspace-page" hidden>
-      <p id="workspace-guard" class="notice" hidden>Авторизуйтесь, чтобы управлять задачами и привычками.</p>
+        <section class="page" id="workspace-page" hidden>
+          <div class="page-head page-head__compact">
+            <div>
+              <p class="eyebrow">Задачи</p>
+              <h2>Задачи, привычки, напоминания</h2>
+              <p class="muted">Сама логика — та же, но UI заточен под Telegram WebApp.</p>
+            </div>
+            <div class="chip-stack compact">
+              <span class="chip" id="workspace-guard" hidden>Нужен логин</span>
+              <span class="chip pill-ghost" id="assistant-guard" hidden>Ассистент требует токен</span>
+            </div>
+          </div>
 
-      <article class="panel" id="tasks-section">
-        <h2>Задачи</h2>
-        <form id="task-form" class="inline-form">
-          <label>Дата<input type="date" id="tasks-date" required /></label>
-          <label>Время<input type="time" id="task-time" /></label>
-          <label>Заголовок<input type="text" id="task-title" required /></label>
-          <label>Описание<input type="text" id="task-description" /></label>
-          <label>Приоритет (1–10)<input type="number" id="task-priority" min="1" max="10" value="5" /></label>
-          <label>Способ отметки
-            <select id="task-completion-mode">
-              <option value="binary">Выполнил/не выполнил</option>
-              <option value="percent">Процент</option>
-            </select>
-          </label>
-          <label>Значение выполнения (0–100)<input type="number" id="task-completion-value" min="0" max="100" value="0" /></label>
-          <button type="submit">Добавить задачу</button>
-        </form>
-        <div class="list" id="tasks-list"></div>
-      </article>
+          <article class="card" id="tasks-section">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Tasks</p>
+                <h3>Фокус дня</h3>
+              </div>
+              <div class="inline-input">
+                <label for="tasks-date">Дата</label>
+                <input type="date" id="tasks-date" required />
+              </div>
+            </header>
+            <form id="task-form" class="form-grid">
+              <label>Время<input type="time" id="task-time" /></label>
+              <label>Заголовок<input type="text" id="task-title" required placeholder="Написать план" /></label>
+              <label>Описание<input type="text" id="task-description" placeholder="Контекст / шаги" /></label>
+              <label>Приоритет (1-10)<input type="number" id="task-priority" min="1" max="10" value="5" /></label>
+              <label>Схема завершения
+                <select id="task-completion-mode">
+                  <option value="binary">Выполнено/нет</option>
+                  <option value="percent">Проценты</option>
+                </select>
+              </label>
+              <label>Прогресс (0-100)<input type="number" id="task-completion-value" min="0" max="100" value="0" /></label>
+              <button type="submit">Добавить задачу</button>
+            </form>
+            <div class="list" id="tasks-list"></div>
+          </article>
 
-      <article class="panel" id="habits-section">
-        <h2>Привычки</h2>
-        <form id="habit-form" class="inline-form">
-          <label>Название<input type="text" id="habit-name" required /></label>
-          <label>Описание<input type="text" id="habit-description" /></label>
-          <label>Тип расписания
-            <select id="habit-schedule">
-              <option value="daily">Каждый день</option>
-              <option value="weekly">Каждую неделю</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label>Способ отметки
-            <select id="habit-completion-mode">
-              <option value="binary">Выполнил/не выполнил</option>
-              <option value="percent">Процент</option>
-            </select>
-          </label>
-          <label>Значение выполнения (0–100)<input type="number" id="habit-completion-value" min="0" max="100" value="0" /></label>
-          <button type="submit">Сохранить привычку</button>
-        </form>
-        <div class="list" id="habits-list"></div>
-      </article>
+          <article class="card" id="habits-section">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Habits</p>
+                <h3>Привычки</h3>
+              </div>
+            </header>
+            <form id="habit-form" class="form-grid">
+              <label>Название<input type="text" id="habit-name" required placeholder="Утренняя зарядка" /></label>
+              <label>Описание<input type="text" id="habit-description" placeholder="5 минут, без пропусков" /></label>
+              <label>График
+                <select id="habit-schedule">
+                  <option value="daily">Каждый день</option>
+                  <option value="weekly">Каждую неделю</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label>Схема завершения
+                <select id="habit-completion-mode">
+                  <option value="binary">Выполнено/нет</option>
+                  <option value="percent">Проценты</option>
+                </select>
+              </label>
+              <label>Прогресс (0-100)<input type="number" id="habit-completion-value" min="0" max="100" value="0" /></label>
+              <button type="submit">Создать привычку</button>
+            </form>
+            <div class="list" id="habits-list"></div>
+          </article>
 
-      <article class="panel" id="reminders-section">
-        <h2>Напоминания</h2>
-        <form id="reminder-form" class="inline-form">
-          <label>Дата<input type="date" id="reminder-date" required /></label>
-          <label>Время<input type="time" id="reminder-time" required /></label>
-          <label>Комментарий<input type="text" id="reminder-note" placeholder="Полить растения" /></label>
-          <button type="submit">Создать таймер</button>
-        </form>
-        <div class="list" id="reminders-list"></div>
-      </article>
-    </section>
+          <article class="card" id="reminders-section">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Reminders</p>
+                <h3>Напоминания</h3>
+              </div>
+            </header>
+            <form id="reminder-form" class="form-grid">
+              <label>Дата<input type="date" id="reminder-date" required /></label>
+              <label>Время<input type="time" id="reminder-time" required /></label>
+              <label>Поведение<input type="text" id="reminder-note" placeholder="Как реагировать на событие" /></label>
+              <button type="submit">Создать триггер</button>
+            </form>
+            <div class="list" id="reminders-list"></div>
+          </article>
+        </section>
 
-    <section class="page" id="assistant-page" hidden>
-      <p id="assistant-guard" class="notice" hidden>Авторизуйтесь, чтобы общаться с ассистентом.</p>
-      <article class="panel">
-        <h2>Ассистент</h2>
-        <form id="assistant-form" class="inline-form">
-          <label>Сообщение ассистенту<input type="text" id="assistant-message" placeholder="Создай задачу завтра..." required /></label>
-          <button type="submit">Отправить</button>
-        </form>
-        <div class="list" id="assistant-history"></div>
-      </article>
-    </section>
+        <section class="page" id="assistant-page" hidden>
+          <div class="page-head page-head__compact">
+            <div>
+              <p class="eyebrow">Assistant</p>
+              <h2>Быстрый диалог</h2>
+              <p class="muted">Rule-based ассистент из backend, теперь в Telegram-шелле.</p>
+            </div>
+          </div>
+          <article class="card">
+            <form id="assistant-form" class="assistant-form">
+              <label>Сообщение ассистенту<input type="text" id="assistant-message" placeholder="Спроси про задачи или привычки" required /></label>
+              <button type="submit">Отправить</button>
+            </form>
+            <div class="list" id="assistant-history"></div>
+          </article>
+        </section>
+      </main>
 
-    <footer>
-      <p id="status">Готово</p>
-      <small>Исходники фронта: <code>frontend/web/public</code>. API: <code>/api/v1</code>.</small>
-    </footer>
+      <nav class="tabbar">
+        <button class="nav-btn active" data-target="auth-page">Профиль</button>
+        <button class="nav-btn" data-target="workspace-page" data-requires-auth="true">Задачи</button>
+        <button class="nav-btn" data-target="assistant-page" data-requires-auth="true">Ассистент</button>
+      </nav>
+    </div>
 
     <script type="module" src="./app.js"></script>
   </body>

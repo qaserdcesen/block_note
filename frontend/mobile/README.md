@@ -1,7 +1,9 @@
-﻿# Mobile (React Native / Expo)
+# Mobile (React Native / Expo) — archived
 
-Minimal Expo structure with TypeScript-only files for now:
+Фокус фронтенда сместился на Telegram Mini App (см. `frontend/web/public`). Этот каталог оставлен как черновик компонентов/экранов Expo, если когда-нибудь понадобится собрать нативную версию.
+
+Структура черновиков:
 - `src/screens` — Today, Chat, Tasks, Habits, Reminders, Settings.
 - `src/components` — Task/Habit/Reminder list items.
 
-TODO: run `npx create-expo-app` (or `expo init`) and move these sources into the generated project, then wire API calls to the FastAPI backend.
+Если нужна нативная сборка, создайте новый проект Expo (`npx create-expo-app`), перенесите эти файлы и подключите тот же REST API (`/api/v1`).

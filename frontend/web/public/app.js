@@ -1,5 +1,6 @@
-﻿const apiBase = "/api/v1";
+const apiBase = "/api/v1";
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const tg = window.Telegram?.WebApp;
 
 const state = {
   token: localStorage.getItem("cthm_token"),
@@ -7,10 +8,12 @@ const state = {
   assistantHistory: [],
   habitStatuses: {},
   userTimezone: localStorage.getItem("cthm_timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  telegramUser: tg?.initDataUnsafe?.user || null,
 };
 
 const statusEl = document.getElementById("status");
 const currentUserEl = document.getElementById("current-user");
+const timezoneIndicator = document.getElementById("timezone-indicator");
 const workspaceGuard = document.getElementById("workspace-guard");
 const assistantGuard = document.getElementById("assistant-guard");
 const tasksList = document.getElementById("tasks-list");
@@ -29,25 +32,72 @@ const pages = {
 };
 
 const today = new Date().toISOString().slice(0, 10);
-tasksDateInput.value = today;
-reminderDate.value = today;
-reminderTime.value = "09:00";
+if (tasksDateInput) tasksDateInput.value = today;
+if (reminderDate) reminderDate.value = today;
+if (reminderTime) reminderTime.value = "09:00";
+
+initTelegram();
+bindNav();
+bindForms();
+updatePanels();
+switchPage(state.currentPage);
+if (state.token) {
+  refreshAll();
+}
+
+function initTelegram() {
+  if (!tg) {
+    updateUserMeta();
+    return;
+  }
+  if (tg.initDataUnsafe?.user) {
+    state.telegramUser = tg.initDataUnsafe.user;
+  }
+  applyTelegramTheme(tg.themeParams);
+  tg.ready();
+  tg.expand();
+  tg.onEvent?.("themeChanged", () => applyTelegramTheme(tg.themeParams));
+  updateUserMeta();
+}
+
+function applyTelegramTheme(themeParams) {
+  if (!themeParams) return;
+  const root = document.documentElement.style;
+  const map = {
+    bg_color: "--tg-theme-bg-color",
+    text_color: "--tg-theme-text-color",
+    hint_color: "--tg-theme-hint-color",
+    button_color: "--tg-theme-button-color",
+    button_text_color: "--tg-theme-button-text-color",
+    secondary_bg_color: "--tg-theme-secondary-bg-color",
+  };
+  Object.entries(map).forEach(([key, cssVar]) => {
+    if (themeParams[key]) {
+      root.setProperty(cssVar, themeParams[key]);
+    }
+  });
+}
 
 function setStatus(message, type = "info") {
+  if (!statusEl) return;
   statusEl.textContent = message;
   statusEl.dataset.type = type;
+  if (tg?.HapticFeedback) {
+    const style = type === "error" ? "heavy" : type === "success" ? "medium" : "light";
+    tg.HapticFeedback.impactOccurred(style);
+  }
 }
 
 function switchPage(targetId) {
   const button = navButtons.find((btn) => btn.dataset.target === targetId);
   const requiresAuth = button?.dataset.requiresAuth === "true";
   if (requiresAuth && !state.token) {
-    setStatus("Авторизуйтесь, чтобы открыть этот раздел", "error");
+    setStatus("Нужен вход, чтобы открыть этот раздел.", "error");
     targetId = "auth-page";
   }
   state.currentPage = targetId;
   Object.entries(pages).forEach(([id, element]) => {
-    element.hidden = id !== targetId;
+    if (element) element.hidden = id !== targetId;
   });
   navButtons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.target === targetId);
@@ -60,27 +110,61 @@ function switchPage(targetId) {
 
 function updateGuards() {
   const loggedIn = Boolean(state.token);
-  workspaceGuard.hidden = loggedIn;
-  assistantGuard.hidden = loggedIn;
+  if (workspaceGuard) workspaceGuard.hidden = loggedIn;
+  if (assistantGuard) assistantGuard.hidden = loggedIn;
   if (!loggedIn && state.currentPage !== "auth-page") {
     switchPage("auth-page");
   }
 }
 
+function updateUserMeta() {
+  const loggedIn = Boolean(state.token);
+  const tgLabel = state.telegramUser?.username || state.telegramUser?.first_name || null;
+  const prefix = loggedIn ? "Авторизован" : "Гость";
+  currentUserEl.textContent = tgLabel ? `${prefix} · ${tgLabel}` : prefix;
+  if (timezoneIndicator) {
+    timezoneIndicator.textContent = state.userTimezone || "UTC";
+  }
+}
+
 function updatePanels() {
   const loggedIn = Boolean(state.token);
-  currentUserEl.textContent = loggedIn ? "Авторизация успешна" : "Не авторизованы";
   navButtons.forEach((btn) => {
     if (btn.dataset.requiresAuth === "true") {
       btn.disabled = !loggedIn;
     }
   });
+  updateUserMeta();
   updateGuards();
 }
 
-navButtons.forEach((btn) => {
-  btn.addEventListener("click", () => switchPage(btn.dataset.target));
-});
+function bindNav() {
+  navButtons.forEach((btn) => {
+    btn.addEventListener("click", () => switchPage(btn.dataset.target));
+  });
+}
+
+function bindForms() {
+  document.getElementById("register-form")?.addEventListener("submit", handleRegister);
+  document.getElementById("login-form")?.addEventListener("submit", handleLogin);
+  document.getElementById("task-form")?.addEventListener("submit", handleCreateTask);
+  document.getElementById("habit-form")?.addEventListener("submit", handleCreateHabit);
+  document.getElementById("reminder-form")?.addEventListener("submit", handleCreateReminder);
+  document.getElementById("assistant-form")?.addEventListener("submit", handleAssistant);
+  tasksDateInput?.addEventListener("change", loadTasks);
+
+  const taskModeSelect = document.getElementById("task-completion-mode");
+  const taskCompletionValue = document.getElementById("task-completion-value");
+  const habitModeSelect = document.getElementById("habit-completion-mode");
+  const habitCompletionValue = document.getElementById("habit-completion-value");
+
+  if (taskModeSelect && taskCompletionValue) {
+    taskModeSelect.addEventListener("change", () => syncCompletionInput(taskModeSelect, taskCompletionValue));
+  }
+  if (habitModeSelect && habitCompletionValue) {
+    habitModeSelect.addEventListener("change", () => syncCompletionInput(habitModeSelect, habitCompletionValue));
+  }
+}
 
 function formatCompletionValue(mode, value) {
   const numeric = Number(value) || 0;
@@ -96,19 +180,30 @@ function syncCompletionInput(modeSelect, valueInput) {
 async function handleRegister(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
+  const timezone = formData.get("timezone") || state.userTimezone || "UTC";
+  const language = formData.get("language") || "ru";
   const payload = {
-    email: formData.get("email"),
-    password: formData.get("password"),
-    timezone: formData.get("timezone"),
-    language: formData.get("language"),
+    email: (formData.get("email") || "").trim(),
+    password: (formData.get("password") || "").trim(),
+    timezone,
+    language,
   };
+  if (!payload.email || !payload.password) {
+    setStatus("Введите e-mail и пароль", "error");
+    return;
+  }
+  if (state.telegramUser?.id) {
+    payload.telegram_id = state.telegramUser.id;
+  }
+  if (state.telegramUser?.username) {
+    payload.telegram_username = state.telegramUser.username;
+  }
   try {
     await fetchJson(`${apiBase}/auth/register`, { method: "POST", body: JSON.stringify(payload) });
-    if (payload.timezone) {
-      state.userTimezone = payload.timezone;
-      localStorage.setItem("cthm_timezone", payload.timezone);
-    }
-    setStatus("Пользователь создан, теперь выполните вход", "success");
+    state.userTimezone = timezone;
+    localStorage.setItem("cthm_timezone", timezone);
+    updateUserMeta();
+    setStatus("Аккаунт создан, теперь можно войти.", "success");
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -125,7 +220,7 @@ async function handleLogin(event) {
     const data = await fetchJson(`${apiBase}/auth/login`, { method: "POST", body: JSON.stringify(payload) });
     state.token = data.access_token;
     localStorage.setItem("cthm_token", state.token);
-    setStatus("Авторизация успешна", "success");
+    setStatus("Вход выполнен", "success");
     updatePanels();
     switchPage("workspace-page");
     await refreshAll();
@@ -159,7 +254,7 @@ async function fetchJson(url, options = {}) {
   }
 
   if (!response.ok) {
-    const message = (data && data.detail) || response.statusText || "Ошибка запроса";
+    const message = formatErrorDetail(data?.detail) || response.statusText || "Ошибка запроса";
     if (response.status === 401) {
       state.token = null;
       localStorage.removeItem("cthm_token");
@@ -168,6 +263,23 @@ async function fetchJson(url, options = {}) {
     throw new Error(message);
   }
   return data;
+}
+
+function formatErrorDetail(detail) {
+  if (!detail) return "";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const first = detail[0];
+    if (typeof first === "string") return first;
+    if (first?.msg) return first.msg;
+    return detail.map((d) => d?.msg || JSON.stringify(d)).join("; ");
+  }
+  if (detail.msg) return detail.msg;
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return String(detail);
+  }
 }
 
 function isoFromDateTime(date, time) {
@@ -219,18 +331,18 @@ async function loadTasks() {
 function renderTasks(tasks) {
   tasksList.innerHTML = "";
   if (!tasks.length) {
-    tasksList.innerHTML = "<p>Нет задач на выбранную дату</p>";
+    tasksList.innerHTML = '<p class="muted">Нет задач на выбранную дату</p>';
     return;
   }
 
   tasks.forEach((task) => {
     const card = document.createElement("article");
-    card.className = "card";
+    card.className = "card entry";
     card.innerHTML = `
       <header class="card-header">
         <div>
           <strong>${task.title}</strong>
-          <p>${task.description || "Без описания"}</p>
+          <p class="muted">${task.description || "Без описания"}</p>
         </div>
         <span class="badge">Приоритет ${task.priority}</span>
       </header>
@@ -246,8 +358,8 @@ function renderTasks(tasks) {
 
     const modeSelect = document.createElement("select");
     [
-      { value: "binary", label: "Бинарно" },
-      { value: "percent", label: "Процент" },
+      { value: "binary", label: "Бинарный" },
+      { value: "percent", label: "Проценты" },
     ].forEach((option) => {
       const opt = document.createElement("option");
       opt.value = option.value;
@@ -273,7 +385,7 @@ function renderTasks(tasks) {
 
     const doneButton = document.createElement("button");
     doneButton.type = "button";
-    doneButton.textContent = "Отметить выполненной";
+    doneButton.textContent = "Завершить";
     doneButton.onclick = () => updateTaskCompletion(task.id, "binary", 100);
 
     const deleteBtn = document.createElement("button");
@@ -328,7 +440,7 @@ async function handleCreateHabit(event) {
     await apiFetch("/habits", { method: "POST", body: JSON.stringify(payload) });
     document.getElementById("habit-name").value = "";
     document.getElementById("habit-description").value = "";
-    setStatus("Привычка сохранена", "success");
+    setStatus("Привычка создана", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
@@ -364,7 +476,7 @@ async function loadHabitStatuses(habits) {
 
 function habitStatusText(habit) {
   const log = state.habitStatuses[habit.id];
-  let label = "Нет отметок";
+  let label = "Нет отметки";
 
   if (habit.completion_mode === "percent") {
     if (habit.completion_value >= 100) {
@@ -375,7 +487,7 @@ function habitStatusText(habit) {
       label = `${habit.completion_value}%`;
     }
   } else if (log) {
-    label = log.status === "done" ? "Выполнено" : "Пропущено";
+    label = log.status === "done" ? "Выполнено" : "Пропуск";
   } else {
     label = habit.completion_value >= 100 ? "Выполнено" : "Не выполнено";
   }
@@ -389,24 +501,26 @@ function habitStatusText(habit) {
 function renderHabits(habits) {
   habitsList.innerHTML = "";
   if (!habits.length) {
-    habitsList.innerHTML = "<p>Нет привычек</p>";
+    habitsList.innerHTML = '<p class="muted">Пока нет привычек</p>';
     return;
   }
 
   habits.forEach((habit) => {
     const card = document.createElement("article");
-    card.className = "card";
+    card.className = "card entry";
     card.innerHTML = `
       <header class="card-header">
         <div>
           <strong>${habit.name}</strong>
-          <p>${habit.description || "Без описания"}</p>
+          <p class="muted">${habit.description || "Без описания"}</p>
         </div>
         <span class="badge">${habit.schedule_type}</span>
       </header>
-      <p>Статус выполнения: ${habitStatusText(habit)}</p>
-      <p>Режим отметки: ${habit.completion_mode === "percent" ? "Процент" : "Выполнил / не выполнил"}</p>
-      <p>Текущее значение: ${habit.completion_mode === "percent" ? `${habit.completion_value}%` : habit.completion_value >= 100 ? "Выполнено" : "Не выполнено"}</p>
+      <p>Статус: ${habitStatusText(habit)}</p>
+      <p>Схема выполнения: ${habit.completion_mode === "percent" ? "Проценты" : "Выполнено / нет"}</p>
+      <p>Последний прогресс: ${
+        habit.completion_mode === "percent" ? `${habit.completion_value}%` : habit.completion_value >= 100 ? "Выполнено" : "Не выполнено"
+      }</p>
     `;
 
     const controls = document.createElement("div");
@@ -416,8 +530,8 @@ function renderHabits(habits) {
     completionControls.className = "completion-controls";
     const modeSelect = document.createElement("select");
     [
-      { value: "binary", label: "Бинарно" },
-      { value: "percent", label: "Процент" },
+      { value: "binary", label: "Бинарный" },
+      { value: "percent", label: "Проценты" },
     ].forEach((option) => {
       const opt = document.createElement("option");
       opt.value = option.value;
@@ -442,12 +556,12 @@ function renderHabits(habits) {
 
     const doneBtn = document.createElement("button");
     doneBtn.type = "button";
-    doneBtn.textContent = "Отметить выполнено сегодня";
+    doneBtn.textContent = "Отметить выполненной";
     doneBtn.onclick = () => logHabitStatus(habit.id, "done");
 
     const skipBtn = document.createElement("button");
     skipBtn.type = "button";
-    skipBtn.textContent = "Отметить пропуск";
+    skipBtn.textContent = "Пропустить";
     skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
 
     controls.append(completionControls, doneBtn, skipBtn);
@@ -476,7 +590,7 @@ async function logHabitStatus(habitId, status) {
       method: "POST",
       body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), status }),
     });
-    setStatus("Статус привычки записан", "success");
+    setStatus("Статус привычки зафиксирован", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
@@ -517,14 +631,14 @@ async function loadReminders() {
 function renderReminders(reminders) {
   remindersList.innerHTML = "";
   if (!reminders.length) {
-    remindersList.innerHTML = "<p>Нет активных напоминаний</p>";
+    remindersList.innerHTML = '<p class="muted">Нет активных напоминаний</p>';
     return;
   }
   reminders.forEach((reminder) => {
     const card = document.createElement("article");
-    card.className = "card";
+    card.className = "card entry";
     const dateStr = reminder.trigger_time ? new Date(reminder.trigger_time).toLocaleString() : "-";
-    card.innerHTML = `<strong>${reminder.type}</strong><p>${reminder.behavior_rule || ""}</p><p>Время: ${dateStr}</p>`;
+    card.innerHTML = `<strong>${reminder.type}</strong><p class="muted">${reminder.behavior_rule || ""}</p><p>Время: ${dateStr}</p>`;
     const actions = document.createElement("div");
     actions.className = "actions";
     const deleteBtn = document.createElement("button");
@@ -548,7 +662,7 @@ async function deleteReminder(id) {
 async function handleAssistant(event) {
   event.preventDefault();
   if (!state.token) {
-    setStatus("Авторизуйтесь для доступа к ассистенту", "error");
+    setStatus("Нужна авторизация для диалога с ассистентом", "error");
     switchPage("auth-page");
     return;
   }
@@ -571,13 +685,13 @@ async function handleAssistant(event) {
 function renderAssistantHistory() {
   assistantHistoryEl.innerHTML = "";
   if (!state.assistantHistory.length) {
-    assistantHistoryEl.innerHTML = "<p>Диалог пуст</p>";
+    assistantHistoryEl.innerHTML = '<p class="muted">Диалог пуст</p>';
     return;
   }
   state.assistantHistory.forEach((item) => {
     const card = document.createElement("article");
-    card.className = "card";
-    card.innerHTML = `<p><strong>Вы:</strong> ${item.user}</p><p><strong>Ассистент:</strong> ${item.reply}</p><small>${item.ts}</small>`;
+    card.className = "card entry";
+    card.innerHTML = `<p><strong>Вы:</strong> ${item.user}</p><p><strong>Ассистент:</strong> ${item.reply}</p><small class="muted">${item.ts}</small>`;
     assistantHistoryEl.appendChild(card);
   });
 }
@@ -589,32 +703,3 @@ async function apiFetch(path, options = {}) {
 async function refreshAll() {
   await Promise.all([loadTasks(), loadHabits(), loadReminders()]);
 }
-
-const taskModeSelect = document.getElementById("task-completion-mode");
-const taskCompletionValue = document.getElementById("task-completion-value");
-const habitModeSelect = document.getElementById("habit-completion-mode");
-const habitCompletionValue = document.getElementById("habit-completion-value");
-
-if (taskModeSelect && taskCompletionValue) {
-  taskModeSelect.addEventListener("change", () => syncCompletionInput(taskModeSelect, taskCompletionValue));
-}
-if (habitModeSelect && habitCompletionValue) {
-  habitModeSelect.addEventListener("change", () => syncCompletionInput(habitModeSelect, habitCompletionValue));
-}
-
-// Инициализация обработчиков
-document.getElementById("register-form").addEventListener("submit", handleRegister);
-document.getElementById("login-form").addEventListener("submit", handleLogin);
-document.getElementById("task-form").addEventListener("submit", handleCreateTask);
-document.getElementById("habit-form").addEventListener("submit", handleCreateHabit);
-document.getElementById("reminder-form").addEventListener("submit", handleCreateReminder);
-document.getElementById("assistant-form").addEventListener("submit", handleAssistant);
-tasksDateInput.addEventListener("change", loadTasks);
-
-updatePanels();
-switchPage(state.currentPage);
-if (state.token) {
-  refreshAll();
-}
-
-

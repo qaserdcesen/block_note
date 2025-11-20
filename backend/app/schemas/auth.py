@@ -6,6 +6,8 @@ class UserRegister(BaseModel):
     password: str
     timezone: str = "UTC"
     language: str = "en"
+    telegram_id: int | None = None
+    telegram_username: str | None = None
 
 
 class UserLogin(BaseModel):

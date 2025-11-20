@@ -1,27 +1,25 @@
-﻿# Contextual Task & Habit Manager
+# Contextual Task & Habit Manager
 
-Умный менеджер задач/привычек/напоминаний. Репозиторий организован как монорепо: FastAPI backend и два фронта (React Native заготовка + статичный web UI). Всё запускается локально, без реальных интеграций с LLM/погодой/геоданными.
+Small personal assistant for tasks, habits, reminders, and a rule-based helper. Backend stays on FastAPI + SQLite; frontend now targets a Telegram Mini App (simple HTML/CSS/JS served from the backend).
 
-## Структура
-`
+## What’s inside
+- **backend/** — FastAPI app with REST endpoints, scheduling, and assistant logic.
+- **frontend/web/** — Telegram Mini App UI (no bundler). Served from `/web`.
+- **frontend/mobile/** — archived Expo/React Native drafts (kept for reference).
+
+## Layout
+```
 root/
-  backend/            # FastAPI-приложение и бизнес-логика
-  frontend/mobile/    # Заготовка Expo/React Native (скелет экранов)
-  frontend/web/
-    public/           # Готовый статичный демо-интерфейс (index.html + app.js)
-    src/              # React-компоненты/страницы для дальнейшего развития
-`
+  backend/            FastAPI application (app/, tests/, data/)
+  frontend/
+    web/
+      public/         Ship-ready mini-app (index.html, app.js, styles.css)
+      src/            Old React/TS sketches (not wired to the build)
+    mobile/           Expo drafts (archived)
+```
 
-Основные модули backend:
-- pp/api — REST-роуты по доменам (auth, tasks, habits, reminders, assistant).
-- pp/services — бизнес-логика, напоминания, уведомления, контекст.
-- pp/models — SQLAlchemy 2.x модели/enum/relations.
-- pp/schemas — Pydantic v2 DTO.
-- pp/core — конфигурация, безопасность, планировщик, заглушка клиента LLM.
-- pp/workers — фоновые задачи (проверка напоминаний).
-
-## Настройка окружения
-`ash
+## Backend setup
+```bash
 cd backend
 python -m venv .venv
 # Linux/macOS
@@ -29,50 +27,36 @@ source .venv/bin/activate
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-cp .env.example .env  # отредактируйте секреты/БД/таймзону
-`
+cp .env.example .env  # fill secrets/DB/timezone/LLM keys if needed
+```
 
-Что положить в .env:
-- APP_NAME, DATABASE_URL (по умолчанию SQLite data/app.db), JWT_SECRET_KEY, SCHEDULER_TIMEZONE.
-- Параметры LLM оставлены на будущее, но для демо не используются.
+Key `.env` values: `APP_NAME`, `DATABASE_URL` (default SQLite `data/app.db`), `JWT_SECRET_KEY`, `SCHEDULER_TIMEZONE`. LLM keys are optional unless you enable those code paths.
 
-## Запуск
-`ash
+## Run
+```bash
 cd backend
 uvicorn app.main:app --reload
-`
+```
 
-При старте:
-1. Создаются таблицы SQLite (ackend/data/app.db).
-2. Регистрируются API-роуты по адресу http://127.0.0.1:8000/api/v1/....
-3. Запускается APScheduler, который каждые 5 минут проверяет time-based напоминания.
-4. Монтируется статичный web UI (rontend/web/public) на /web, а корневой / редиректит туда.
+On start:
+1. SQLite database is created at `backend/data/app.db` (unless you point to another DB).
+2. REST API lives at `http://127.0.0.1:8000/api/v1/...`.
+3. APScheduler polls every ~5 minutes for time-based reminders.
+4. Telegram mini-app UI is served at `/web` (same host).
 
-## Как «увидеть» функционал
-1. После запуска откройте http://127.0.0.1:8000/ — простое SPA без сборки (HTML/CSS/JS).
-2. Навигация разделена на три “страницы”:
-   - **Авторизация** — регистрация и вход (JWT хранится в localStorage).
-   - **Задачи/Привычки/Напоминания** — рабочая панель.
-     * Задачи: выбор любой даты, ввод приоритета 1–10, выбор способа отметки (бинарный/процентный), ручное редактирование прогресса.
-     * Привычки: создание расписаний, выбор способа отметки, вывод статуса выполнения (последний лог) и быстрые кнопки «выполнено/пропуск».
-     * Напоминания: time-based напоминания с произвольным описанием.
-   - **Ассистент** — чат с rule-based ассистентом (создаёт задачи/напоминания без реального LLM).
-3. Вкладки «Рабочая панель» и «Ассистент» доступны только после авторизации.
+## API surface (v1)
+- `POST /api/v1/auth/register` — create user.
+- `POST /api/v1/auth/login` — obtain JWT.
+- `GET|POST|PATCH|DELETE /api/v1/tasks?date=YYYY-MM-DD` — tasks with priority 1–10 and completion tracking.
+- `GET|POST|PATCH /api/v1/habits` and `GET|POST /api/v1/habits/{habit_id}/logs` — habits + daily/weekly logs.
+- `GET|POST|PATCH|DELETE /api/v1/reminders` — time-based reminders.
+- `POST /api/v1/assistant/message` — rule-based assistant reply.
 
-## REST-эндпоинты
-1. POST /api/v1/auth/register — создать пользователя.
-2. POST /api/v1/auth/login — получить JWT.
-3. GET/POST/PATCH/DELETE /api/v1/tasks + ?date=YYYY-MM-DD (поддержка приоритетов 1–10 и режимов completion).
-4. GET/POST/PATCH /api/v1/habits и GET/POST /api/v1/habits/{habit_id}/logs (режимы completion + статусные логи).
-5. GET/POST/PATCH/DELETE /api/v1/reminders.
-6. POST /api/v1/assistant/message — чат с rule-based ассистентом.
+## Frontends
+- **Telegram Mini App (primary)**: `frontend/web/public` is static, uses Telegram WebApp API (themes, haptics) and works without a bundler. Open `/web` locally or set the same URL in BotFather as `Web App URL`.
+- **Expo skeleton (archived)**: `frontend/mobile` keeps component drafts; not wired to the current flow.
 
-## Фронтенды
-- **frontend/web/public** — минимальный runnable UI (HTML/CSS/JS) с навигацией по разделам.
-- **frontend/mobile/src** — структура экранов и компонентов для будущего Expo-приложения.
-- **frontend/web/src** — TypeScript-компоненты/страницы (можно перенести в Vite/Next проект).
-
-## Дальнейшие шаги
-- Подключить реальный LLM/внешние контексты в pp/core/llm_client.py и context_service.py.
-- Добавить миграции Alembic и автоматические тесты.
-- Развить полноценные React/React Native клиенты поверх REST API.
+## Notes for further work
+- LLM helpers live in `backend/app/core/llm_client.py` and `context_service.py`.
+- Alembic migrations are not set up yet.
+- React/React Native implementations can reuse the same REST API surface when/if revived.

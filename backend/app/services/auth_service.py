@@ -22,6 +22,8 @@ def register_user(db: Session, data: UserRegister) -> User:
         hashed_password=security.get_password_hash(data.password),
         timezone=data.timezone,
         language=data.language,
+        telegram_id=data.telegram_id,
+        telegram_username=data.telegram_username,
     )
     db.add(user)
     db.commit()

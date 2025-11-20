@@ -7,6 +7,8 @@ class UserBase(BaseModel):
     email: EmailStr
     timezone: str
     language: str
+    telegram_id: int | None = None
+    telegram_username: str | None = None
 
 
 class UserCreate(UserBase):
