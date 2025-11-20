@@ -1,5 +1,6 @@
+﻿
 const apiBase = "/api/v1";
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const tg = window.Telegram?.WebApp;
 
 const state = {
@@ -7,28 +8,37 @@ const state = {
   currentPage: "auth-page",
   assistantHistory: [],
   habitStatuses: {},
+  categories: [],
+  tags: [],
   userTimezone: localStorage.getItem("cthm_timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   telegramUser: tg?.initDataUnsafe?.user || null,
 };
 
-const statusEl = document.getElementById("status");
-const currentUserEl = document.getElementById("current-user");
-const timezoneIndicator = document.getElementById("timezone-indicator");
-const workspaceGuard = document.getElementById("workspace-guard");
-const assistantGuard = document.getElementById("assistant-guard");
-const tasksList = document.getElementById("tasks-list");
-const habitsList = document.getElementById("habits-list");
-const remindersList = document.getElementById("reminders-list");
-const assistantHistoryEl = document.getElementById("assistant-history");
-const tasksDateInput = document.getElementById("tasks-date");
-const reminderDate = document.getElementById("reminder-date");
-const reminderTime = document.getElementById("reminder-time");
+const el = (id) => document.getElementById(id);
+const statusEl = el("status");
+const currentUserEl = el("current-user");
+const timezoneIndicator = el("timezone-indicator");
+const workspaceGuard = el("workspace-guard");
+const assistantGuard = el("assistant-guard");
+const tasksList = el("tasks-list");
+const habitsList = el("habits-list");
+const remindersList = el("reminders-list");
+const assistantHistoryEl = el("assistant-history");
+const tasksDateInput = el("tasks-date");
+const reminderDate = el("reminder-date");
+const reminderTime = el("reminder-time");
+const categoriesList = el("categories-list");
+const tagsList = el("tags-list");
+const taskCategorySelect = el("task-category");
+const habitCategorySelect = el("habit-category");
+const taskTagsSelect = el("task-tags");
+const habitTagsSelect = el("habit-tags");
 const navButtons = Array.from(document.querySelectorAll(".nav-btn"));
 
 const pages = {
-  "auth-page": document.getElementById("auth-page"),
-  "workspace-page": document.getElementById("workspace-page"),
-  "assistant-page": document.getElementById("assistant-page"),
+  "auth-page": el("auth-page"),
+  "workspace-page": el("workspace-page"),
+  "assistant-page": el("assistant-page"),
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -41,18 +51,14 @@ bindNav();
 bindForms();
 updatePanels();
 switchPage(state.currentPage);
-if (state.token) {
-  refreshAll();
-}
+if (state.token) refreshAll();
 
 function initTelegram() {
   if (!tg) {
     updateUserMeta();
     return;
   }
-  if (tg.initDataUnsafe?.user) {
-    state.telegramUser = tg.initDataUnsafe.user;
-  }
+  if (tg.initDataUnsafe?.user) state.telegramUser = tg.initDataUnsafe.user;
   applyTelegramTheme(tg.themeParams);
   tg.ready();
   tg.expand();
@@ -71,11 +77,7 @@ function applyTelegramTheme(themeParams) {
     button_text_color: "--tg-theme-button-text-color",
     secondary_bg_color: "--tg-theme-secondary-bg-color",
   };
-  Object.entries(map).forEach(([key, cssVar]) => {
-    if (themeParams[key]) {
-      root.setProperty(cssVar, themeParams[key]);
-    }
-  });
+  Object.entries(map).forEach(([k, cssVar]) => themeParams[k] && root.setProperty(cssVar, themeParams[k]));
 }
 
 function setStatus(message, type = "info") {
@@ -92,18 +94,14 @@ function switchPage(targetId) {
   const button = navButtons.find((btn) => btn.dataset.target === targetId);
   const requiresAuth = button?.dataset.requiresAuth === "true";
   if (requiresAuth && !state.token) {
-    setStatus("Нужен вход, чтобы открыть этот раздел.", "error");
+    setStatus("Нужно авторизоваться, чтобы открыть этот раздел", "error");
     targetId = "auth-page";
   }
   state.currentPage = targetId;
-  Object.entries(pages).forEach(([id, element]) => {
-    if (element) element.hidden = id !== targetId;
-  });
+  Object.entries(pages).forEach(([id, element]) => element && (element.hidden = id !== targetId));
   navButtons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.target === targetId);
-    if (btn.dataset.requiresAuth === "true") {
-      btn.disabled = !state.token;
-    }
+    if (btn.dataset.requiresAuth === "true") btn.disabled = !state.token;
   });
   updateGuards();
 }
@@ -112,65 +110,44 @@ function updateGuards() {
   const loggedIn = Boolean(state.token);
   if (workspaceGuard) workspaceGuard.hidden = loggedIn;
   if (assistantGuard) assistantGuard.hidden = loggedIn;
-  if (!loggedIn && state.currentPage !== "auth-page") {
-    switchPage("auth-page");
-  }
+  if (!loggedIn && state.currentPage !== "auth-page") switchPage("auth-page");
 }
 
 function updateUserMeta() {
   const loggedIn = Boolean(state.token);
   const tgLabel = state.telegramUser?.username || state.telegramUser?.first_name || null;
-  const prefix = loggedIn ? "Авторизован" : "Гость";
-  currentUserEl.textContent = tgLabel ? `${prefix} · ${tgLabel}` : prefix;
-  if (timezoneIndicator) {
-    timezoneIndicator.textContent = state.userTimezone || "UTC";
-  }
+  const prefix = loggedIn ? "Вход выполнен" : "Гость";
+  currentUserEl.textContent = tgLabel ? `${prefix}: ${tgLabel}` : prefix;
+  if (timezoneIndicator) timezoneIndicator.textContent = state.userTimezone || "UTC";
 }
 
 function updatePanels() {
   const loggedIn = Boolean(state.token);
-  navButtons.forEach((btn) => {
-    if (btn.dataset.requiresAuth === "true") {
-      btn.disabled = !loggedIn;
-    }
-  });
+  navButtons.forEach((btn) => btn.dataset.requiresAuth === "true" && (btn.disabled = !loggedIn));
   updateUserMeta();
   updateGuards();
 }
 
 function bindNav() {
-  navButtons.forEach((btn) => {
-    btn.addEventListener("click", () => switchPage(btn.dataset.target));
-  });
+  navButtons.forEach((btn) => btn.addEventListener("click", () => switchPage(btn.dataset.target)));
 }
 
 function bindForms() {
-  document.getElementById("register-form")?.addEventListener("submit", handleRegister);
-  document.getElementById("login-form")?.addEventListener("submit", handleLogin);
-  document.getElementById("task-form")?.addEventListener("submit", handleCreateTask);
-  document.getElementById("habit-form")?.addEventListener("submit", handleCreateHabit);
-  document.getElementById("reminder-form")?.addEventListener("submit", handleCreateReminder);
-  document.getElementById("assistant-form")?.addEventListener("submit", handleAssistant);
+  el("register-form")?.addEventListener("submit", handleRegister);
+  el("login-form")?.addEventListener("submit", handleLogin);
+  el("task-form")?.addEventListener("submit", handleCreateTask);
+  el("habit-form")?.addEventListener("submit", handleCreateHabit);
+  el("reminder-form")?.addEventListener("submit", handleCreateReminder);
+  el("assistant-form")?.addEventListener("submit", handleAssistant);
+  el("category-form")?.addEventListener("submit", handleCreateCategory);
+  el("tag-form")?.addEventListener("submit", handleCreateTag);
   tasksDateInput?.addEventListener("change", loadTasks);
-
-  const taskCompletionValue = document.getElementById("task-completion-value");
-  const taskCompletionToggle = document.getElementById("task-done");
-  const habitCompletionValue = document.getElementById("habit-completion-value");
-  const habitCompletionToggle = document.getElementById("habit-done");
-
-  linkCompletionInputs(taskCompletionValue, taskCompletionToggle);
-  linkCompletionInputs(habitCompletionValue, habitCompletionToggle);
+  linkCompletionInputs(el("task-completion-value"), el("task-done"));
+  linkCompletionInputs(el("habit-completion-value"), el("habit-done"));
 }
 
-function normalizeCompletionValue(value) {
-  return clamp(Number(value) || 0, 0, 100);
-}
-
-function completionStatusFromValue(value) {
-  if (value >= 100) return "done";
-  if (value > 0) return "in_progress";
-  return "pending";
-}
+const normalizeCompletionValue = (value) => clamp(Number(value) || 0, 0, 100);
+const completionStatusFromValue = (value) => (value >= 100 ? "done" : value > 0 ? "in_progress" : "pending");
 
 function linkCompletionInputs(valueInput, checkbox) {
   if (!valueInput || !checkbox) return;
@@ -187,26 +164,21 @@ function linkCompletionInputs(valueInput, checkbox) {
 async function handleRegister(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
-  const timezone = formData.get("timezone") || state.userTimezone || "UTC";
-  const language = formData.get("language") || "ru";
   const payload = {
     email: (formData.get("email") || "").trim(),
     password: (formData.get("password") || "").trim(),
-    timezone,
-    language,
+    timezone: formData.get("timezone") || state.userTimezone || "UTC",
+    language: formData.get("language") || "ru",
   };
-  if (!payload.email || !payload.password) {
-    setStatus("Введите e-mail и пароль", "error");
-    return;
-  }
+  if (!payload.email || !payload.password) return setStatus("Введите e-mail и пароль", "error");
   if (state.telegramUser?.id) payload.telegram_id = state.telegramUser.id;
   if (state.telegramUser?.username) payload.telegram_username = state.telegramUser.username;
   try {
     await fetchJson(`${apiBase}/auth/register`, { method: "POST", body: JSON.stringify(payload) });
-    state.userTimezone = timezone;
-    localStorage.setItem("cthm_timezone", timezone);
+    state.userTimezone = payload.timezone;
+    localStorage.setItem("cthm_timezone", payload.timezone);
     updateUserMeta();
-    setStatus("Аккаунт создан, теперь можно войти.", "success");
+    setStatus("Регистрация успешна, можно войти", "success");
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -215,10 +187,7 @@ async function handleRegister(event) {
 async function handleLogin(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
-  const payload = {
-    email: formData.get("email"),
-    password: formData.get("password"),
-  };
+  const payload = { email: formData.get("email"), password: formData.get("password") };
   try {
     const data = await fetchJson(`${apiBase}/auth/login`, { method: "POST", body: JSON.stringify(payload) });
     state.token = data.access_token;
@@ -234,16 +203,11 @@ async function handleLogin(event) {
     setStatus(error.message, "error");
   }
 }
-
 async function fetchJson(url, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-  if (state.token && !url.includes("/auth/")) {
-    headers.Authorization = `Bearer ${state.token}`;
-  }
-
+  if (state.token && !url.includes("/auth/")) headers.Authorization = `Bearer ${state.token}`;
   const response = await fetch(url, { ...options, headers });
   if (response.status === 204) return null;
-
   const rawText = await response.text();
   let data = null;
   if (rawText) {
@@ -253,7 +217,6 @@ async function fetchJson(url, options = {}) {
       data = { detail: rawText };
     }
   }
-
   if (!response.ok) {
     const message = formatErrorDetail(data?.detail) || response.statusText || "Ошибка запроса";
     if (response.status === 401) {
@@ -269,12 +232,7 @@ async function fetchJson(url, options = {}) {
 function formatErrorDetail(detail) {
   if (!detail) return "";
   if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) {
-    return detail
-      .map((d) => (typeof d === "string" ? d : d?.msg || d?.detail || JSON.stringify(d)))
-      .filter(Boolean)
-      .join("; ");
-  }
+  if (Array.isArray(detail)) return detail.map((d) => (typeof d === "string" ? d : d?.msg || d?.detail || JSON.stringify(d))).filter(Boolean).join("; ");
   if (detail?.msg) return detail.msg;
   if (detail?.detail) return detail.detail;
   try {
@@ -284,42 +242,204 @@ function formatErrorDetail(detail) {
   }
 }
 
-function isoFromDateTime(date, time) {
-  if (!date) return null;
-  return `${date}T${time || "00:00"}:00`;
+const isoFromDateTime = (date, time) => (date ? `${date}T${time || "00:00"}:00` : null);
+const splitDateTimeParts = (iso) => {
+  if (!iso) return { date: "", time: "" };
+  const [date, time] = iso.split("T");
+  return { date: date || "", time: (time || "").slice(0, 5) };
+};
+const readSelectedValues = (selectEl) => (!selectEl ? [] : Array.from(selectEl.selectedOptions || []).map((o) => Number(o.value)).filter(Boolean));
+
+function populateSelect(selectEl, options, includeEmpty = true) {
+  if (!selectEl) return;
+  selectEl.innerHTML = "";
+  if (includeEmpty) {
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Без категории";
+    selectEl.appendChild(empty);
+  }
+  options.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.name;
+    selectEl.appendChild(option);
+  });
 }
 
+function populateTagSelect(selectEl, selectedIds = []) {
+  if (!selectEl) return;
+  selectEl.innerHTML = "";
+  state.tags.forEach((tag) => {
+    const option = document.createElement("option");
+    option.value = tag.id;
+    option.textContent = `#${tag.name}`;
+    option.selected = selectedIds.includes(tag.id);
+    selectEl.appendChild(option);
+  });
+}
+
+const buildCategorySelect = (selectedId = null) => {
+  const select = document.createElement("select");
+  populateSelect(select, state.categories);
+  if (selectedId) select.value = String(selectedId);
+  return select;
+};
+
+const buildTagMultiSelect = (selectedIds = []) => {
+  const select = document.createElement("select");
+  select.multiple = true;
+  select.size = 4;
+  populateTagSelect(select, selectedIds);
+  return select;
+};
+
+async function handleCreateCategory(event) {
+  event.preventDefault();
+  const nameInput = el("category-name");
+  const name = (nameInput?.value || "").trim();
+  if (!name) return setStatus("Добавьте название категории", "error");
+  try {
+    await apiFetch("/categories", { method: "POST", body: JSON.stringify({ name }) });
+    if (nameInput) nameInput.value = "";
+    setStatus("Категория сохранена", "success");
+    await loadTaxonomy();
+    await Promise.all([loadTasks(), loadHabits()]);
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function handleCreateTag(event) {
+  event.preventDefault();
+  const nameInput = el("tag-name");
+  const name = (nameInput?.value || "").trim();
+  if (!name) return setStatus("Добавьте имя тега", "error");
+  try {
+    await apiFetch("/tags", { method: "POST", body: JSON.stringify({ name }) });
+    if (nameInput) nameInput.value = "";
+    setStatus("Тег сохранён", "success");
+    await loadTaxonomy();
+    await Promise.all([loadTasks(), loadHabits()]);
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function deleteCategory(id) {
+  try {
+    await apiFetch(`/categories/${id}`, { method: "DELETE" });
+    await loadTaxonomy();
+    await Promise.all([loadTasks(), loadHabits()]);
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function deleteTag(id) {
+  try {
+    await apiFetch(`/tags/${id}`, { method: "DELETE" });
+    await loadTaxonomy();
+    await Promise.all([loadTasks(), loadHabits()]);
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function loadTaxonomy() {
+  if (!state.token) return;
+  try {
+    const [categories, tags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
+    state.categories = categories || [];
+    state.tags = tags || [];
+    renderTaxonomy();
+    syncCreationSelectors();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+function renderTaxonomy() {
+  if (categoriesList) {
+    categoriesList.innerHTML = "";
+    if (!state.categories.length) {
+      categoriesList.innerHTML = '<p class="muted">Категорий пока нет</p>';
+    } else {
+      state.categories.forEach((cat) => {
+        const item = document.createElement("div");
+        item.className = "chip actionable";
+        const label = document.createElement("span");
+        label.textContent = cat.name;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "ghost-btn";
+        remove.textContent = "✕";
+        remove.onclick = () => deleteCategory(cat.id);
+        item.append(label, remove);
+        categoriesList.appendChild(item);
+      });
+    }
+  }
+  if (tagsList) {
+    tagsList.innerHTML = "";
+    if (!state.tags.length) {
+      tagsList.innerHTML = '<p class="muted">Тегов пока нет</p>';
+    } else {
+      state.tags.forEach((tag) => {
+        const item = document.createElement("div");
+        item.className = "chip actionable";
+        const label = document.createElement("span");
+        label.textContent = `#${tag.name}`;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "ghost-btn";
+        remove.textContent = "✕";
+        remove.onclick = () => deleteTag(tag.id);
+        item.append(label, remove);
+        tagsList.appendChild(item);
+      });
+    }
+  }
+}
+
+const syncCreationSelectors = () => {
+  populateSelect(taskCategorySelect, state.categories);
+  populateSelect(habitCategorySelect, state.categories);
+  populateTagSelect(taskTagsSelect);
+  populateTagSelect(habitTagsSelect);
+};
 async function handleCreateTask(event) {
   event.preventDefault();
-  const title = document.getElementById("task-title").value;
-  const description = document.getElementById("task-description").value;
-  const priority = Number(document.getElementById("task-priority").value) || 1;
-  const due = isoFromDateTime(tasksDateInput.value, document.getElementById("task-time").value);
   const payload = {
-    title,
-    description,
-    priority,
-    due_datetime: due,
+    title: el("task-title").value,
+    description: el("task-description").value,
+    priority: Number(el("task-priority").value) || 1,
+    due_datetime: isoFromDateTime(tasksDateInput.value, el("task-time").value),
     completion_mode: "percent",
     completion_value: 0,
     status: "pending",
+    category_id: Number(taskCategorySelect?.value) || null,
+    tag_ids: readSelectedValues(taskTagsSelect),
   };
   try {
     await apiFetch("/tasks", { method: "POST", body: JSON.stringify(payload) });
-    document.getElementById("task-title").value = "";
-    document.getElementById("task-description").value = "";
+    el("task-title").value = "";
+    el("task-description").value = "";
+    if (taskCategorySelect) taskCategorySelect.value = "";
+    if (taskTagsSelect) Array.from(taskTagsSelect.options).forEach((opt) => (opt.selected = false));
     setStatus("Задача добавлена", "success");
     await loadTasks();
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
+
 async function loadTasks() {
   if (!state.token) return;
-  const date = tasksDateInput.value;
+  const date = tasksDateInput?.value || today;
   try {
     const tasks = await apiFetch(`/tasks?date=${date}`);
-    renderTasks(tasks);
+    renderTasks(tasks || []);
   } catch (error) {
     renderTasks([]);
     setStatus(error.message, "error");
@@ -329,20 +449,18 @@ async function loadTasks() {
 function renderTasks(tasks) {
   tasksList.innerHTML = "";
   if (!tasks.length) {
-    tasksList.innerHTML = '<p class="muted">На выбранную дату задач нет</p>';
+    tasksList.innerHTML = '<p class="muted">Нет задач на эту дату</p>';
     return;
   }
   tasks.forEach((task) => {
     const statusKey = completionStatusFromValue(task.completion_value);
     const statusLabel = taskStatusLabel(statusKey);
     const dueLabel = task.due_datetime
-      ? new Date(task.due_datetime).toLocaleString("ru-RU", {
-          hour: "2-digit",
-          minute: "2-digit",
-          month: "short",
-          day: "numeric",
-        })
+      ? new Date(task.due_datetime).toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" })
       : "Без срока";
+    const categoryLabel = task.category?.name || "Без категории";
+    const tagsLabel = task.tags?.length ? task.tags.map((t) => `#${t.name}`).join(", ") : "Теги не выбраны";
+
     const card = document.createElement("article");
     card.className = "card entry";
     card.innerHTML = `
@@ -355,9 +473,18 @@ function renderTasks(tasks) {
       </header>
       <p>Статус: <span class="badge badge-neutral">${statusLabel}</span></p>
       <p>Срок: <span class="badge badge-neutral">${dueLabel}</span></p>
+      <p class="muted">Категория: ${categoryLabel}</p>
+      <p class="muted">Теги: ${tagsLabel}</p>
     `;
     const controls = document.createElement("div");
     controls.className = "actions stack";
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "ghost-btn";
+    editBtn.textContent = "Редактировать";
+    editBtn.onclick = () => openTaskEditor(task, card);
+
     const completionControls = document.createElement("div");
     completionControls.className = "completion-controls";
     const doneLabel = document.createElement("label");
@@ -388,39 +515,119 @@ function renderTasks(tasks) {
       valueBadge.textContent = `${nextValue}%`;
       updateTaskCompletion(task.id, nextValue);
     };
-    doneLabel.append(doneToggle, document.createTextNode("Галочка: выполнено"));
+    doneLabel.append(doneToggle, document.createTextNode("Выполнено"));
     const applyButton = document.createElement("button");
     applyButton.type = "button";
     applyButton.textContent = "Обновить прогресс";
     applyButton.onclick = () => updateTaskCompletion(task.id, valueInput.value);
     completionControls.append(doneLabel, valueInput, valueBadge, applyButton);
+
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.textContent = "Удалить";
     deleteBtn.onclick = () => deleteTask(task.id);
-    controls.append(completionControls, deleteBtn);
+    controls.append(editBtn, completionControls, deleteBtn);
+
     card.appendChild(controls);
     tasksList.appendChild(card);
   });
 }
-async function updateTaskCompletion(taskId, value) {
-  try {
-    const completion_value = normalizeCompletionValue(value);
+
+const labelWrap = (text, control) => {
+  const label = document.createElement("label");
+  label.textContent = text;
+  label.append(control);
+  return label;
+};
+
+function openTaskEditor(task, card) {
+  card.querySelectorAll(".inline-editor").forEach((el) => el.remove());
+  const { date, time } = splitDateTimeParts(task.due_datetime);
+  const form = document.createElement("form");
+  form.className = "inline-editor";
+
+  const titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.value = task.title;
+  const descriptionInput = document.createElement("input");
+  descriptionInput.type = "text";
+  descriptionInput.value = task.description || "";
+  const dateInput = document.createElement("input");
+  dateInput.type = "date";
+  dateInput.value = date || tasksDateInput.value;
+  const timeInput = document.createElement("input");
+  timeInput.type = "time";
+  timeInput.value = time || "09:00";
+  const priorityInput = document.createElement("input");
+  priorityInput.type = "number";
+  priorityInput.min = 1;
+  priorityInput.max = 10;
+  priorityInput.value = task.priority;
+  const categorySelect = buildCategorySelect(task.category_id);
+  const tagSelect = buildTagMultiSelect(task.tags?.map((t) => t.id) || []);
+
+  form.append(
+    labelWrap("Название", titleInput),
+    labelWrap("Описание", descriptionInput),
+    labelWrap("Дата", dateInput),
+    labelWrap("Время", timeInput),
+    labelWrap("Приоритет (1-10)", priorityInput),
+    labelWrap("Категория", categorySelect),
+    labelWrap("Теги", tagSelect)
+  );
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.textContent = "Сохранить";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "ghost-btn";
+  cancelBtn.textContent = "Отмена";
+  cancelBtn.onclick = () => form.remove();
+  actions.append(saveBtn, cancelBtn);
+  form.append(actions);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
     const payload = {
-      completion_mode: "percent",
-      completion_value,
-      status: completionStatusFromValue(completion_value),
+      title: titleInput.value,
+      description: descriptionInput.value,
+      priority: Number(priorityInput.value) || 1,
+      due_datetime: isoFromDateTime(dateInput.value, timeInput.value),
+      category_id: Number(categorySelect.value) || null,
+      tag_ids: readSelectedValues(tagSelect),
     };
-    await apiFetch(`/tasks/${taskId}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-    setStatus("Статус задачи обновлен", "success");
+    await saveTaskEdit(task.id, payload, form);
+  });
+
+  card.appendChild(form);
+}
+
+async function saveTaskEdit(taskId, payload, formNode) {
+  try {
+    await apiFetch(`/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) });
+    setStatus("Задача обновлена", "success");
+    formNode?.remove();
     await loadTasks();
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
+
+async function updateTaskCompletion(taskId, value) {
+  try {
+    const completion_value = normalizeCompletionValue(value);
+    const payload = { completion_mode: "percent", completion_value, status: completionStatusFromValue(completion_value) };
+    await apiFetch(`/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) });
+    setStatus("Прогресс задачи обновлён", "success");
+    await loadTasks();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
 async function deleteTask(id) {
   try {
     await apiFetch(`/tasks/${id}`, { method: "DELETE" });
@@ -431,41 +638,40 @@ async function deleteTask(id) {
 }
 
 function taskStatusLabel(status) {
-  const map = {
-    pending: "Запланирована",
-    in_progress: "В работе",
-    done: "Выполнена",
-    cancelled: "Отменена",
-  };
+  const map = { pending: "В очереди", in_progress: "В работе", done: "Готово", cancelled: "Отменено" };
   return map[status] || "-";
 }
-
 async function handleCreateHabit(event) {
   event.preventDefault();
   const payload = {
-    name: document.getElementById("habit-name").value,
-    description: document.getElementById("habit-description").value,
-    schedule_type: document.getElementById("habit-schedule").value,
+    name: el("habit-name").value,
+    description: el("habit-description").value,
+    schedule_type: el("habit-schedule").value,
     completion_mode: "percent",
     completion_value: 0,
     is_active: true,
+    category_id: Number(habitCategorySelect?.value) || null,
+    tag_ids: readSelectedValues(habitTagsSelect),
   };
   try {
     await apiFetch("/habits", { method: "POST", body: JSON.stringify(payload) });
-    document.getElementById("habit-name").value = "";
-    document.getElementById("habit-description").value = "";
-    setStatus("Привычка создана", "success");
+    el("habit-name").value = "";
+    el("habit-description").value = "";
+    if (habitCategorySelect) habitCategorySelect.value = "";
+    if (habitTagsSelect) Array.from(habitTagsSelect.options).forEach((opt) => (opt.selected = false));
+    setStatus("Привычка добавлена", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
+
 async function loadHabits() {
   if (!state.token) return;
   try {
     const habits = await apiFetch("/habits");
-    await loadHabitStatuses(habits);
-    renderHabits(habits);
+    await loadHabitStatuses(habits || []);
+    renderHabits(habits || []);
   } catch (error) {
     renderHabits([]);
     setStatus(error.message, "error");
@@ -491,20 +697,14 @@ function habitStatusText(habit) {
   const log = state.habitStatuses[habit.id];
   const statusKey = completionStatusFromValue(habit.completion_value);
   let label;
-  if (log?.status === "skipped") {
-    label = "Пропущено";
-  } else if (statusKey === "done") {
-    label = "Выполнено";
-  } else if (statusKey === "in_progress") {
-    label = `${habit.completion_value}%`;
-  } else {
-    label = "Не выполнено";
-  }
-  if (habit.schedule_type === "weekly" && log) {
-    return `${label} (${log.date})`;
-  }
+  if (log?.status === "skipped") label = "Пропущено";
+  else if (statusKey === "done") label = "Готово";
+  else if (statusKey === "in_progress") label = `${habit.completion_value}%`;
+  else label = "Не выполнено";
+  if (habit.schedule_type === "weekly" && log) return `${label} (${log.date})`;
   return label;
 }
+
 function renderHabits(habits) {
   habitsList.innerHTML = "";
   if (!habits.length) {
@@ -513,6 +713,8 @@ function renderHabits(habits) {
   }
   habits.forEach((habit) => {
     const statusLabel = habitStatusText(habit);
+    const categoryLabel = habit.category?.name || "Без категории";
+    const tagsLabel = habit.tags?.length ? habit.tags.map((t) => `#${t.name}`).join(", ") : "Теги не выбраны";
     const card = document.createElement("article");
     card.className = "card entry";
     card.innerHTML = `
@@ -524,9 +726,19 @@ function renderHabits(habits) {
         <span class="badge">${habit.schedule_type}</span>
       </header>
       <p>Статус: ${statusLabel}</p>
+      <p class="muted">Категория: ${categoryLabel}</p>
+      <p class="muted">Теги: ${tagsLabel}</p>
     `;
+
     const controls = document.createElement("div");
     controls.className = "actions stack";
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "ghost-btn";
+    editBtn.textContent = "Редактировать";
+    editBtn.onclick = () => openHabitEditor(habit, card);
+
     const completionControls = document.createElement("div");
     completionControls.className = "completion-controls";
     const doneLabel = document.createElement("label");
@@ -557,41 +769,115 @@ function renderHabits(habits) {
       valueBadge.textContent = `${nextValue}%`;
       updateHabitCompletion(habit.id, nextValue);
     };
-    doneLabel.append(doneToggle, document.createTextNode("Галочка: выполнено"));
+    doneLabel.append(doneToggle, document.createTextNode("Выполнено"));
     const applyButton = document.createElement("button");
     applyButton.type = "button";
     applyButton.textContent = "Обновить прогресс";
     applyButton.onclick = () => updateHabitCompletion(habit.id, valueInput.value);
     completionControls.append(doneLabel, valueInput, valueBadge, applyButton);
+
     const skipBtn = document.createElement("button");
     skipBtn.type = "button";
-    skipBtn.textContent = "Пропустить";
+    skipBtn.textContent = "Пропуск";
     skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
-    controls.append(completionControls, skipBtn);
+
+    controls.append(editBtn, completionControls, skipBtn);
     card.appendChild(controls);
     habitsList.appendChild(card);
   });
 }
-async function updateHabitCompletion(habitId, value) {
+
+function openHabitEditor(habit, card) {
+  card.querySelectorAll(".inline-editor").forEach((el) => el.remove());
+  const form = document.createElement("form");
+  form.className = "inline-editor";
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.value = habit.name;
+  const descInput = document.createElement("input");
+  descInput.type = "text";
+  descInput.value = habit.description || "";
+  const scheduleSelect = document.createElement("select");
+  [
+    { value: "daily", label: "Каждый день" },
+    { value: "weekly", label: "Раз в неделю" },
+    { value: "custom", label: "Custom" },
+  ].forEach(({ value, label }) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    if (value === habit.schedule_type) option.selected = true;
+    scheduleSelect.appendChild(option);
+  });
+  const activeToggle = document.createElement("input");
+  activeToggle.type = "checkbox";
+  activeToggle.checked = habit.is_active;
+  const categorySelect = buildCategorySelect(habit.category_id);
+  const tagSelect = buildTagMultiSelect(habit.tags?.map((t) => t.id) || []);
+
+  form.append(
+    labelWrap("Название", nameInput),
+    labelWrap("Описание", descInput),
+    labelWrap("График", scheduleSelect),
+    labelWrap("Активна", activeToggle),
+    labelWrap("Категория", categorySelect),
+    labelWrap("Теги", tagSelect)
+  );
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.textContent = "Сохранить";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "ghost-btn";
+  cancelBtn.textContent = "Отмена";
+  cancelBtn.onclick = () => form.remove();
+  actions.append(saveBtn, cancelBtn);
+  form.append(actions);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const payload = {
+      name: nameInput.value,
+      description: descInput.value,
+      schedule_type: scheduleSelect.value,
+      is_active: activeToggle.checked,
+      category_id: Number(categorySelect.value) || null,
+      tag_ids: readSelectedValues(tagSelect),
+    };
+    await saveHabitEdit(habit.id, payload, form);
+  });
+  card.appendChild(form);
+}
+async function saveHabitEdit(habitId, payload, formNode) {
   try {
-    const completion_value = normalizeCompletionValue(value);
-    await apiFetch(`/habits/${habitId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ completion_mode: "percent", completion_value }),
-    });
-    setStatus("Прогресс привычки обновлен", "success");
+    await apiFetch(`/habits/${habitId}`, { method: "PATCH", body: JSON.stringify(payload) });
+    setStatus("Привычка обновлена", "success");
+    formNode?.remove();
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
+
+async function updateHabitCompletion(habitId, value) {
+  try {
+    const completion_value = normalizeCompletionValue(value);
+    await apiFetch(`/habits/${habitId}`, { method: "PATCH", body: JSON.stringify({ completion_mode: "percent", completion_value }) });
+    setStatus("Прогресс привычки обновлён", "success");
+    await loadHabits();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
 async function logHabitStatus(habitId, status) {
   try {
-    await apiFetch(`/habits/${habitId}/logs`, {
-      method: "POST",
-      body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), status }),
-    });
-    setStatus("Статус привычки зафиксирован", "success");
+    await apiFetch(`/habits/${habitId}/logs`, { method: "POST", body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), status }) });
+    setStatus("Статус привычки отмечен", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
@@ -601,17 +887,11 @@ async function logHabitStatus(habitId, status) {
 async function handleCreateReminder(event) {
   event.preventDefault();
   const trigger = isoFromDateTime(reminderDate.value, reminderTime.value);
-  const note = document.getElementById("reminder-note").value || "Напоминание";
-  const payload = {
-    type: "time",
-    trigger_time: trigger,
-    trigger_timezone: state.userTimezone || "UTC",
-    is_active: true,
-    behavior_rule: note,
-  };
+  const note = el("reminder-note").value || "Напоминание";
+  const payload = { type: "time", trigger_time: trigger, trigger_timezone: state.userTimezone || "UTC", is_active: true, behavior_rule: note };
   try {
     await apiFetch("/reminders", { method: "POST", body: JSON.stringify(payload) });
-    setStatus("Напоминание создано", "success");
+    setStatus("Напоминание добавлено", "success");
     await loadReminders();
   } catch (error) {
     setStatus(error.message, "error");
@@ -622,7 +902,7 @@ async function loadReminders() {
   if (!state.token) return;
   try {
     const reminders = await apiFetch("/reminders");
-    renderReminders(reminders);
+    renderReminders(reminders || []);
   } catch (error) {
     renderReminders([]);
     setStatus(error.message, "error");
@@ -632,14 +912,14 @@ async function loadReminders() {
 function renderReminders(reminders) {
   remindersList.innerHTML = "";
   if (!reminders.length) {
-    remindersList.innerHTML = '<p class="muted">Нет активных напоминаний</p>';
+    remindersList.innerHTML = '<p class="muted">Пока нет напоминаний</p>';
     return;
   }
   reminders.forEach((reminder) => {
     const card = document.createElement("article");
     card.className = "card entry";
     const dateStr = reminder.trigger_time ? new Date(reminder.trigger_time).toLocaleString("ru-RU") : "-";
-    card.innerHTML = `<strong>${reminder.type}</strong><p class="muted">${reminder.behavior_rule || ""}</p><p>Время: ${dateStr}</p>`;
+    card.innerHTML = `<strong>${reminder.type}</strong><p class="muted">${reminder.behavior_rule || ""}</p><p>Когда: ${dateStr}</p>`;
     const actions = document.createElement("div");
     actions.className = "actions";
     const deleteBtn = document.createElement("button");
@@ -663,19 +943,16 @@ async function deleteReminder(id) {
 async function handleAssistant(event) {
   event.preventDefault();
   if (!state.token) {
-    setStatus("Нужна авторизация для диалога с ассистентом", "error");
+    setStatus("Нужно авторизоваться, чтобы пользоваться ассистентом", "error");
     switchPage("auth-page");
     return;
   }
-  const messageInput = document.getElementById("assistant-message");
+  const messageInput = el("assistant-message");
   const message = messageInput.value.trim();
   if (!message) return;
   messageInput.value = "";
   try {
-    const response = await apiFetch("/assistant/message", {
-      method: "POST",
-      body: JSON.stringify({ user_message: message }),
-    });
+    const response = await apiFetch("/assistant/message", { method: "POST", body: JSON.stringify({ user_message: message }) });
     state.assistantHistory.unshift({ user: message, reply: response.reply, ts: new Date().toLocaleTimeString("ru-RU") });
     renderAssistantHistory();
   } catch (error) {
@@ -686,13 +963,13 @@ async function handleAssistant(event) {
 function renderAssistantHistory() {
   assistantHistoryEl.innerHTML = "";
   if (!state.assistantHistory.length) {
-    assistantHistoryEl.innerHTML = '<p class="muted">Диалог пуст</p>';
+    assistantHistoryEl.innerHTML = '<p class="muted">История пуста</p>';
     return;
   }
   state.assistantHistory.forEach((item) => {
     const card = document.createElement("article");
     card.className = "card entry";
-    card.innerHTML = `<p><strong>Вы:</strong> ${item.user}</p><p><strong>Ассистент:</strong> ${item.reply}</p><small class="muted">${item.ts}</small>`;
+    card.innerHTML = `<p><strong>Вы:</strong> ${item.user}</p><p><strong>Ответ:</strong> ${item.reply}</p><small class="muted">${item.ts}</small>`;
     assistantHistoryEl.appendChild(card);
   });
 }
@@ -702,5 +979,7 @@ async function apiFetch(path, options = {}) {
 }
 
 async function refreshAll() {
+  if (!state.token) return;
+  await loadTaxonomy();
   await Promise.all([loadTasks(), loadHabits(), loadReminders()]);
 }

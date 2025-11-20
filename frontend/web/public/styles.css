@@ -147,6 +147,12 @@ body {
   font-weight: 600;
 }
 
+.chip.actionable {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .chip.compact,
 .chip-stack.compact {
   gap: 6px;
@@ -272,6 +278,13 @@ button:disabled {
   box-shadow: none;
 }
 
+.ghost-btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px dashed var(--stroke);
+  box-shadow: none;
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -319,6 +332,18 @@ button:disabled {
   flex-direction: column;
 }
 
+.inline-editor {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px dashed var(--stroke);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.inline-editor .actions {
+  margin-top: 4px;
+}
+
 .completion-controls {
   display: flex;
   gap: 8px;
@@ -359,6 +384,10 @@ button:disabled {
   color: var(--accent-text);
   border-color: transparent;
   box-shadow: 0 10px 30px rgba(107, 139, 255, 0.35);
+}
+
+select[multiple] {
+  height: auto;
 }
 
 .eyebrow {

@@ -28,4 +28,6 @@ class User(Base):
     messages: Mapped[List["Message"]] = relationship(back_populates="user")
     notification_channels: Mapped[List["NotificationChannel"]] = relationship(back_populates="user")
     habit_logs: Mapped[List["HabitLog"]] = relationship(back_populates="user")
+    categories: Mapped[List["Category"]] = relationship(back_populates="user")
+    tags: Mapped[List["Tag"]] = relationship(back_populates="user")
 

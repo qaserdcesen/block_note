@@ -1,9 +1,11 @@
-﻿from datetime import date, datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.habit import HabitCompletionMode, HabitLogStatus, HabitSchedule
+from app.schemas.category import CategoryRead
+from app.schemas.tag import TagRead
 
 
 class HabitBase(BaseModel):
@@ -18,6 +20,8 @@ class HabitBase(BaseModel):
 
 class HabitCreate(HabitBase):
     user_id: int | None = None
+    category_id: int | None = None
+    tag_ids: list[int] = Field(default_factory=list)
 
 
 class HabitUpdate(BaseModel):
@@ -28,11 +32,16 @@ class HabitUpdate(BaseModel):
     is_active: Optional[bool] = None
     completion_mode: Optional[HabitCompletionMode] = None
     completion_value: Optional[int] = Field(None, ge=0, le=100)
+    category_id: Optional[int] = None
+    tag_ids: Optional[list[int]] = None
 
 
 class HabitRead(HabitBase):
     id: int
     user_id: int
+    category_id: int | None = None
+    category: CategoryRead | None = None
+    tags: list[TagRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -53,4 +62,3 @@ class HabitLogRead(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-

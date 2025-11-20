@@ -11,8 +11,13 @@ router = APIRouter(prefix="/habits", tags=["habits"])
 
 
 @router.get("", response_model=list[HabitRead])
-def list_habits(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return habit_service.list_habits(db, current_user.id)
+def list_habits(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    category_id: int | None = None,
+    tag_id: int | None = None,
+):
+    return habit_service.list_habits(db, current_user.id, category_id=category_id, tag_id=tag_id)
 
 
 @router.post("", response_model=HabitRead)

@@ -6,6 +6,7 @@ from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Inte
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.tag import habit_tags
 
 
 class HabitSchedule(str, Enum):
@@ -38,12 +39,15 @@ class Habit(Base):
         SAEnum(HabitCompletionMode), default=HabitCompletionMode.PERCENT, nullable=False
     )
     completion_value: Mapped[int] = mapped_column(Integer, default=0)
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     user = relationship("User", back_populates="habits")
+    category = relationship("Category", back_populates="habits")
+    tags = relationship("Tag", secondary=habit_tags, back_populates="habits")
     logs: Mapped[List["HabitLog"]] = relationship(back_populates="habit")
     reminders: Mapped[List["Reminder"]] = relationship(back_populates="habit")
 

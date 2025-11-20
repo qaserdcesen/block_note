@@ -6,6 +6,7 @@ from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, String, Te
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.tag import task_tags
 
 
 class TaskStatus(str, Enum):
@@ -34,11 +35,14 @@ class Task(Base):
         SAEnum(CompletionMode), default=CompletionMode.PERCENT, nullable=False
     )
     completion_value: Mapped[int] = mapped_column(Integer, default=0)
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     user = relationship("User", back_populates="tasks")
+    category = relationship("Category", back_populates="tasks")
+    tags = relationship("Tag", secondary=task_tags, back_populates="tasks")
     reminders: Mapped[List["Reminder"]] = relationship(back_populates="task")
 

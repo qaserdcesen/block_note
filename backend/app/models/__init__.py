@@ -1,4 +1,3 @@
-﻿from . import habit, message, notification, reminder, task, user
+from . import category, habit, message, notification, reminder, tag, task, user
 
-__all__ = ["habit", "message", "notification", "reminder", "task", "user"]
-
+__all__ = ["category", "habit", "message", "notification", "reminder", "tag", "task", "user"]

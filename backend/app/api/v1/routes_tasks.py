@@ -18,8 +18,12 @@ def list_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     date_param: date = Query(..., alias="date"),
+    category_id: int | None = Query(None),
+    tag_id: int | None = Query(None),
 ):
-    return task_service.list_tasks_for_date(db, user_id=current_user.id, day=date_param)
+    return task_service.list_tasks_for_date(
+        db, user_id=current_user.id, day=date_param, category_id=category_id, tag_id=tag_id
+    )
 
 
 @router.post("", response_model=TaskRead)
