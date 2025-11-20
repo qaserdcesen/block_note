@@ -153,25 +153,35 @@ function bindForms() {
   document.getElementById("assistant-form")?.addEventListener("submit", handleAssistant);
   tasksDateInput?.addEventListener("change", loadTasks);
 
-  const taskModeSelect = document.getElementById("task-completion-mode");
   const taskCompletionValue = document.getElementById("task-completion-value");
-  const habitModeSelect = document.getElementById("habit-completion-mode");
+  const taskCompletionToggle = document.getElementById("task-done");
   const habitCompletionValue = document.getElementById("habit-completion-value");
+  const habitCompletionToggle = document.getElementById("habit-done");
 
-  taskModeSelect?.addEventListener("change", () => syncCompletionInput(taskModeSelect, taskCompletionValue));
-  habitModeSelect?.addEventListener("change", () => syncCompletionInput(habitModeSelect, habitCompletionValue));
+  linkCompletionInputs(taskCompletionValue, taskCompletionToggle);
+  linkCompletionInputs(habitCompletionValue, habitCompletionToggle);
 }
 
-function formatCompletionValue(mode, value) {
-  const numeric = Number(value) || 0;
-  return mode === "binary" ? (numeric >= 100 ? 100 : 0) : clamp(numeric, 0, 100);
+function normalizeCompletionValue(value) {
+  return clamp(Number(value) || 0, 0, 100);
 }
 
-function syncCompletionInput(modeSelect, valueInput) {
-  if (!modeSelect || !valueInput) return;
-  const normalized = formatCompletionValue(modeSelect.value, valueInput.value);
-  valueInput.value = normalized;
-  valueInput.step = modeSelect.value === "binary" ? 100 : 5;
+function completionStatusFromValue(value) {
+  if (value >= 100) return "done";
+  if (value > 0) return "in_progress";
+  return "pending";
+}
+
+function linkCompletionInputs(valueInput, checkbox) {
+  if (!valueInput || !checkbox) return;
+  valueInput.addEventListener("change", () => {
+    const normalized = normalizeCompletionValue(valueInput.value);
+    valueInput.value = normalized;
+    checkbox.checked = normalized >= 100;
+  });
+  checkbox.addEventListener("change", () => {
+    valueInput.value = checkbox.checked ? 100 : 0;
+  });
 }
 
 async function handleRegister(event) {
@@ -284,30 +294,36 @@ async function handleCreateTask(event) {
   const title = document.getElementById("task-title").value;
   const description = document.getElementById("task-description").value;
   const priority = Number(document.getElementById("task-priority").value) || 1;
-  const completionMode = document.getElementById("task-completion-mode").value;
   const completionValueInput = document.getElementById("task-completion-value");
-  const completionValue = formatCompletionValue(completionMode, completionValueInput.value);
+  const completionToggle = document.getElementById("task-done");
+  let completionValue = normalizeCompletionValue(completionValueInput.value);
+  if (completionToggle?.checked) {
+    completionValue = 100;
+  }
   completionValueInput.value = completionValue;
+  const status = completionStatusFromValue(completionValue);
   const due = isoFromDateTime(tasksDateInput.value, document.getElementById("task-time").value);
   const payload = {
     title,
     description,
     priority,
     due_datetime: due,
-    completion_mode: completionMode,
+    completion_mode: "percent",
     completion_value: completionValue,
+    status,
   };
   try {
     await apiFetch("/tasks", { method: "POST", body: JSON.stringify(payload) });
     document.getElementById("task-title").value = "";
     document.getElementById("task-description").value = "";
+    completionValueInput.value = 0;
+    if (completionToggle) completionToggle.checked = false;
     setStatus("Задача добавлена", "success");
     await loadTasks();
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
-
 async function loadTasks() {
   if (!state.token) return;
   const date = tasksDateInput.value;
@@ -323,12 +339,11 @@ async function loadTasks() {
 function renderTasks(tasks) {
   tasksList.innerHTML = "";
   if (!tasks.length) {
-    tasksList.innerHTML = '<p class="muted">Нет задач на выбранную дату</p>';
+    tasksList.innerHTML = '<p class="muted">На выбранную дату задач нет</p>';
     return;
   }
-
   tasks.forEach((task) => {
-    const statusKey = task.completion_value >= 100 ? "done" : task.status;
+    const statusKey = completionStatusFromValue(task.completion_value);
     const statusLabel = taskStatusLabel(statusKey);
     const dueLabel = task.due_datetime
       ? new Date(task.due_datetime).toLocaleString("ru-RU", {
@@ -350,83 +365,65 @@ function renderTasks(tasks) {
       </header>
       <p>Статус: <span class="badge badge-neutral">${statusLabel}</span></p>
       <p>Срок: <span class="badge badge-neutral">${dueLabel}</span></p>
-      <p>Прогресс: ${
-        task.completion_mode === "percent"
-          ? `${task.completion_value}%`
-          : task.completion_value >= 100
-          ? "Выполнено"
-          : "Не выполнено"
-      }</p>
+      <p>Прогресс: <span class="badge badge-neutral">${task.completion_value}%</span></p>
     `;
-
     const controls = document.createElement("div");
     controls.className = "actions stack";
-
     const completionControls = document.createElement("div");
     completionControls.className = "completion-controls";
-
-    const modeSelect = document.createElement("select");
-    [
-      { value: "binary", label: "Бинарно" },
-      { value: "percent", label: "Проценты" },
-    ].forEach((option) => {
-      const opt = document.createElement("option");
-      opt.value = option.value;
-      opt.textContent = option.label;
-      if (task.completion_mode === option.value) opt.selected = true;
-      modeSelect.appendChild(opt);
-    });
-
+    const doneLabel = document.createElement("label");
+    doneLabel.className = "checkbox-inline";
+    const doneToggle = document.createElement("input");
+    doneToggle.type = "checkbox";
+    doneToggle.checked = task.completion_value >= 100;
     const valueInput = document.createElement("input");
     valueInput.type = "number";
     valueInput.min = 0;
     valueInput.max = 100;
     valueInput.value = task.completion_value;
-    syncCompletionInput(modeSelect, valueInput);
-    modeSelect.addEventListener("change", () => syncCompletionInput(modeSelect, valueInput));
-
+    valueInput.addEventListener("change", () => {
+      const normalized = normalizeCompletionValue(valueInput.value);
+      valueInput.value = normalized;
+      doneToggle.checked = normalized >= 100;
+    });
+    doneToggle.onchange = () => {
+      const nextValue = doneToggle.checked ? 100 : 0;
+      valueInput.value = nextValue;
+      updateTaskCompletion(task.id, nextValue);
+    };
+    doneLabel.append(doneToggle, document.createTextNode("Галочка: выполнено"));
     const applyButton = document.createElement("button");
     applyButton.type = "button";
     applyButton.textContent = "Обновить прогресс";
-    applyButton.onclick = () => updateTaskCompletion(task.id, modeSelect.value, valueInput.value);
-
-    completionControls.append(modeSelect, valueInput, applyButton);
-
-    const doneButton = document.createElement("button");
-    doneButton.type = "button";
-    doneButton.textContent = "Отметить выполненной";
-    doneButton.onclick = () => updateTaskCompletion(task.id, "binary", 100);
-
+    applyButton.onclick = () => updateTaskCompletion(task.id, valueInput.value);
+    completionControls.append(doneLabel, valueInput, applyButton);
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.textContent = "Удалить";
     deleteBtn.onclick = () => deleteTask(task.id);
-
-    controls.append(completionControls, doneButton, deleteBtn);
+    controls.append(completionControls, deleteBtn);
     card.appendChild(controls);
     tasksList.appendChild(card);
   });
 }
-
-async function updateTaskCompletion(taskId, mode, value) {
+async function updateTaskCompletion(taskId, value) {
   try {
-    const completion_value = formatCompletionValue(mode, value);
+    const completion_value = normalizeCompletionValue(value);
     const payload = {
-      completion_mode: mode,
+      completion_mode: "percent",
       completion_value,
-      status: completion_value >= 100 ? "done" : completion_value > 0 ? "in_progress" : "pending",
+      status: completionStatusFromValue(completion_value),
     };
     await apiFetch(`/tasks/${taskId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
-    setStatus("Прогресс задачи обновлён", "success");
+    setStatus("Статус задачи обновлен", "success");
     await loadTasks();
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
-
 async function deleteTask(id) {
   try {
     await apiFetch(`/tasks/${id}`, { method: "DELETE" });
@@ -443,34 +440,38 @@ function taskStatusLabel(status) {
     done: "Выполнена",
     cancelled: "Отменена",
   };
-  return map[status] || "—";
+  return map[status] || "-";
 }
 
 async function handleCreateHabit(event) {
   event.preventDefault();
+  const completionValueInput = document.getElementById("habit-completion-value");
+  const completionToggle = document.getElementById("habit-done");
+  let completion_value = normalizeCompletionValue(completionValueInput.value);
+  if (completionToggle?.checked) {
+    completion_value = 100;
+  }
+  completionValueInput.value = completion_value;
   const payload = {
     name: document.getElementById("habit-name").value,
     description: document.getElementById("habit-description").value,
     schedule_type: document.getElementById("habit-schedule").value,
-    completion_mode: document.getElementById("habit-completion-mode").value,
-    completion_value: formatCompletionValue(
-      document.getElementById("habit-completion-mode").value,
-      document.getElementById("habit-completion-value").value
-    ),
+    completion_mode: "percent",
+    completion_value,
     is_active: true,
   };
-  document.getElementById("habit-completion-value").value = payload.completion_value;
   try {
     await apiFetch("/habits", { method: "POST", body: JSON.stringify(payload) });
     document.getElementById("habit-name").value = "";
     document.getElementById("habit-description").value = "";
+    completionValueInput.value = 0;
+    if (completionToggle) completionToggle.checked = false;
     setStatus("Привычка создана", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
-
 async function loadHabits() {
   if (!state.token) return;
   try {
@@ -500,36 +501,30 @@ async function loadHabitStatuses(habits) {
 
 function habitStatusText(habit) {
   const log = state.habitStatuses[habit.id];
-  let label = "Нет отметки";
-
-  if (habit.completion_mode === "percent") {
-    if (habit.completion_value >= 100) {
-      label = "Выполнена";
-    } else if (habit.completion_value <= 0) {
-      label = "Не выполнена";
-    } else {
-      label = `${habit.completion_value}%`;
-    }
-  } else if (log) {
-    label = log.status === "done" ? "Выполнена" : "Пропуск";
+  const statusKey = completionStatusFromValue(habit.completion_value);
+  let label;
+  if (log?.status === "skipped") {
+    label = "Пропущено";
+  } else if (statusKey === "done") {
+    label = "Выполнено";
+  } else if (statusKey === "in_progress") {
+    label = `${habit.completion_value}%`;
   } else {
-    label = habit.completion_value >= 100 ? "Выполнена" : "Не выполнена";
+    label = "Не выполнено";
   }
-
   if (habit.schedule_type === "weekly" && log) {
     return `${label} (${log.date})`;
   }
   return label;
 }
-
 function renderHabits(habits) {
   habitsList.innerHTML = "";
   if (!habits.length) {
     habitsList.innerHTML = '<p class="muted">Пока нет привычек</p>';
     return;
   }
-
   habits.forEach((habit) => {
+    const statusLabel = habitStatusText(habit);
     const card = document.createElement("article");
     card.className = "card entry";
     card.innerHTML = `
@@ -540,74 +535,61 @@ function renderHabits(habits) {
         </div>
         <span class="badge">${habit.schedule_type}</span>
       </header>
-      <p>Статус: ${habitStatusText(habit)}</p>
-      <p>Схема выполнения: ${habit.completion_mode === "percent" ? "Проценты" : "Выполнено / нет"}</p>
-      <p>Последний прогресс: ${
-        habit.completion_mode === "percent" ? `${habit.completion_value}%` : habit.completion_value >= 100 ? "Выполнено" : "Не выполнено"
-      }</p>
+      <p>Статус: ${statusLabel}</p>
+      <p>Прогресс: <span class="badge badge-neutral">${habit.completion_value}%</span></p>
     `;
-
     const controls = document.createElement("div");
     controls.className = "actions stack";
-
     const completionControls = document.createElement("div");
     completionControls.className = "completion-controls";
-    const modeSelect = document.createElement("select");
-    [
-      { value: "binary", label: "Бинарно" },
-      { value: "percent", label: "Проценты" },
-    ].forEach((option) => {
-      const opt = document.createElement("option");
-      opt.value = option.value;
-      opt.textContent = option.label;
-      if (habit.completion_mode === option.value) opt.selected = true;
-      modeSelect.appendChild(opt);
-    });
+    const doneLabel = document.createElement("label");
+    doneLabel.className = "checkbox-inline";
+    const doneToggle = document.createElement("input");
+    doneToggle.type = "checkbox";
+    doneToggle.checked = habit.completion_value >= 100;
     const valueInput = document.createElement("input");
     valueInput.type = "number";
     valueInput.min = 0;
     valueInput.max = 100;
     valueInput.value = habit.completion_value;
-    syncCompletionInput(modeSelect, valueInput);
-    modeSelect.addEventListener("change", () => syncCompletionInput(modeSelect, valueInput));
-
+    valueInput.addEventListener("change", () => {
+      const normalized = normalizeCompletionValue(valueInput.value);
+      valueInput.value = normalized;
+      doneToggle.checked = normalized >= 100;
+    });
+    doneToggle.onchange = () => {
+      const nextValue = doneToggle.checked ? 100 : 0;
+      valueInput.value = nextValue;
+      updateHabitCompletion(habit.id, nextValue);
+    };
+    doneLabel.append(doneToggle, document.createTextNode("Галочка: выполнено"));
     const applyButton = document.createElement("button");
     applyButton.type = "button";
     applyButton.textContent = "Обновить прогресс";
-    applyButton.onclick = () => updateHabitCompletion(habit.id, modeSelect.value, valueInput.value);
-
-    completionControls.append(modeSelect, valueInput, applyButton);
-
-    const doneBtn = document.createElement("button");
-    doneBtn.type = "button";
-    doneBtn.textContent = "Отметить выполненной";
-    doneBtn.onclick = () => logHabitStatus(habit.id, "done");
-
+    applyButton.onclick = () => updateHabitCompletion(habit.id, valueInput.value);
+    completionControls.append(doneLabel, valueInput, applyButton);
     const skipBtn = document.createElement("button");
     skipBtn.type = "button";
     skipBtn.textContent = "Пропустить";
     skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
-
-    controls.append(completionControls, doneBtn, skipBtn);
+    controls.append(completionControls, skipBtn);
     card.appendChild(controls);
     habitsList.appendChild(card);
   });
 }
-
-async function updateHabitCompletion(habitId, mode, value) {
+async function updateHabitCompletion(habitId, value) {
   try {
-    const completion_value = formatCompletionValue(mode, value);
+    const completion_value = normalizeCompletionValue(value);
     await apiFetch(`/habits/${habitId}`, {
       method: "PATCH",
-      body: JSON.stringify({ completion_mode: mode, completion_value }),
+      body: JSON.stringify({ completion_mode: "percent", completion_value }),
     });
-    setStatus("Прогресс привычки обновлён", "success");
+    setStatus("Прогресс привычки обновлен", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
-
 async function logHabitStatus(habitId, status) {
   try {
     await apiFetch(`/habits/${habitId}/logs`, {

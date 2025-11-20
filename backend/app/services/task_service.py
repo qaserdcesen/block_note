@@ -24,21 +24,19 @@ def list_tasks_for_date(db: Session, user_id: int, day: date) -> List[Task]:
 
 
 def _normalize_completion(payload: dict[str, Any], fallback_mode: CompletionMode | None = None) -> None:
-    mode = payload.get("completion_mode") or fallback_mode
-    if mode is None:
-        return
+    mode = payload.get("completion_mode") or fallback_mode or CompletionMode.PERCENT
+    payload["completion_mode"] = mode
     raw_value = payload.get("completion_value", 0)
-    status = payload.get("status")
+    value = max(0, min(100, int(raw_value)))
 
-    if mode == CompletionMode.BINARY:
-        if status == TaskStatus.DONE:
-            payload["completion_value"] = 100
-        elif status in {TaskStatus.PENDING, TaskStatus.CANCELLED}:
-            payload["completion_value"] = 0
-        else:
-            payload["completion_value"] = 100 if raw_value and int(raw_value) >= 100 else 0
-    else:
-        payload["completion_value"] = max(0, min(100, int(raw_value)))
+    if payload.get("status") == TaskStatus.DONE:
+        value = 100
+    elif payload.get("status") == TaskStatus.CANCELLED:
+        value = 0
+
+    payload["completion_value"] = value
+    if "status" not in payload:
+        payload["status"] = TaskStatus.DONE if value >= 100 else TaskStatus.IN_PROGRESS if value > 0 else TaskStatus.PENDING
 
 
 def create_task(db: Session, data: TaskCreate) -> Task:

@@ -216,6 +216,14 @@ label {
   font-size: 0.95rem;
 }
 
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 600;
+}
+
 input,
 select,
 button {
@@ -227,6 +235,15 @@ button {
   padding: 12px 12px;
   font-size: 1rem;
   backdrop-filter: blur(6px);
+}
+
+input[type="checkbox"] {
+  width: auto;
+  height: 18px;
+  padding: 0;
+  border-radius: 6px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 input:focus,

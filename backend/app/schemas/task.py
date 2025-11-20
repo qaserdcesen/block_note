@@ -12,7 +12,7 @@ class TaskBase(BaseModel):
     due_datetime: Optional[datetime] = None
     status: TaskStatus = TaskStatus.PENDING
     priority: int = 2
-    completion_mode: CompletionMode = CompletionMode.BINARY
+    completion_mode: CompletionMode = CompletionMode.PERCENT
     completion_value: int = Field(0, ge=0, le=100)
 
 

@@ -31,7 +31,7 @@ class Task(Base):
     status: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus), default=TaskStatus.PENDING, nullable=False)
     priority: Mapped[int] = mapped_column(Integer, default=2)
     completion_mode: Mapped[CompletionMode] = mapped_column(
-        SAEnum(CompletionMode), default=CompletionMode.BINARY, nullable=False
+        SAEnum(CompletionMode), default=CompletionMode.PERCENT, nullable=False
     )
     completion_value: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

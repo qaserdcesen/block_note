@@ -12,7 +12,7 @@ class HabitBase(BaseModel):
     schedule_type: HabitSchedule
     schedule_config: Optional[dict] = None
     is_active: bool = True
-    completion_mode: HabitCompletionMode = HabitCompletionMode.BINARY
+    completion_mode: HabitCompletionMode = HabitCompletionMode.PERCENT
     completion_value: int = Field(0, ge=0, le=100)
 
 

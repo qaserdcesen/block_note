@@ -12,11 +12,10 @@ def list_habits(db: Session, user_id: int) -> list[Habit]:
 
 
 def _normalize_completion(payload: dict, fallback_mode: HabitCompletionMode | None = None) -> None:
-    mode = payload.get("completion_mode") or fallback_mode
-    if mode is None:
-        return
+    mode = payload.get("completion_mode") or fallback_mode or HabitCompletionMode.PERCENT
+    payload["completion_mode"] = mode
     raw_value = payload.get("completion_value", 0)
-    payload["completion_value"] = max(0, min(100, int(raw_value))) if mode == HabitCompletionMode.PERCENT else (100 if raw_value and int(raw_value) >= 100 else 0)
+    payload["completion_value"] = max(0, min(100, int(raw_value)))
 
 
 def create_habit(db: Session, data: HabitCreate) -> Habit:

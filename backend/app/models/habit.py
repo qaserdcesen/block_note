@@ -35,7 +35,7 @@ class Habit(Base):
     schedule_config: Mapped[dict | None] = mapped_column(JSON)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     completion_mode: Mapped[HabitCompletionMode] = mapped_column(
-        SAEnum(HabitCompletionMode), default=HabitCompletionMode.BINARY, nullable=False
+        SAEnum(HabitCompletionMode), default=HabitCompletionMode.PERCENT, nullable=False
     )
     completion_value: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

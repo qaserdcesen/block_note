@@ -23,9 +23,9 @@ def _normalize_enum_values(table: str, column: str) -> None:
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     # Lightweight migrations for SQLite/initial runs.
-    _ensure_column("tasks", "completion_mode", "completion_mode VARCHAR(20) NOT NULL DEFAULT 'binary'")
+    _ensure_column("tasks", "completion_mode", "completion_mode VARCHAR(20) NOT NULL DEFAULT 'percent'")
     _ensure_column("tasks", "completion_value", "completion_value INTEGER NOT NULL DEFAULT 0")
-    _ensure_column("habits", "completion_mode", "completion_mode VARCHAR(20) NOT NULL DEFAULT 'binary'")
+    _ensure_column("habits", "completion_mode", "completion_mode VARCHAR(20) NOT NULL DEFAULT 'percent'")
     _ensure_column("habits", "completion_value", "completion_value INTEGER NOT NULL DEFAULT 0")
     _ensure_column("users", "telegram_id", "telegram_id BIGINT UNIQUE")
     _ensure_column("users", "telegram_username", "telegram_username VARCHAR(64)")
