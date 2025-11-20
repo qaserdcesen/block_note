@@ -325,6 +325,10 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.completion-slider {
+  flex: 1 1 160px;
+}
+
 .tabbar {
   position: fixed;
   left: 0;

@@ -294,14 +294,6 @@ async function handleCreateTask(event) {
   const title = document.getElementById("task-title").value;
   const description = document.getElementById("task-description").value;
   const priority = Number(document.getElementById("task-priority").value) || 1;
-  const completionValueInput = document.getElementById("task-completion-value");
-  const completionToggle = document.getElementById("task-done");
-  let completionValue = normalizeCompletionValue(completionValueInput.value);
-  if (completionToggle?.checked) {
-    completionValue = 100;
-  }
-  completionValueInput.value = completionValue;
-  const status = completionStatusFromValue(completionValue);
   const due = isoFromDateTime(tasksDateInput.value, document.getElementById("task-time").value);
   const payload = {
     title,
@@ -309,15 +301,13 @@ async function handleCreateTask(event) {
     priority,
     due_datetime: due,
     completion_mode: "percent",
-    completion_value: completionValue,
-    status,
+    completion_value: 0,
+    status: "pending",
   };
   try {
     await apiFetch("/tasks", { method: "POST", body: JSON.stringify(payload) });
     document.getElementById("task-title").value = "";
     document.getElementById("task-description").value = "";
-    completionValueInput.value = 0;
-    if (completionToggle) completionToggle.checked = false;
     setStatus("Задача добавлена", "success");
     await loadTasks();
   } catch (error) {
@@ -365,7 +355,6 @@ function renderTasks(tasks) {
       </header>
       <p>Статус: <span class="badge badge-neutral">${statusLabel}</span></p>
       <p>Срок: <span class="badge badge-neutral">${dueLabel}</span></p>
-      <p>Прогресс: <span class="badge badge-neutral">${task.completion_value}%</span></p>
     `;
     const controls = document.createElement("div");
     controls.className = "actions stack";
@@ -377,18 +366,26 @@ function renderTasks(tasks) {
     doneToggle.type = "checkbox";
     doneToggle.checked = task.completion_value >= 100;
     const valueInput = document.createElement("input");
-    valueInput.type = "number";
+    valueInput.type = "range";
     valueInput.min = 0;
     valueInput.max = 100;
+    valueInput.step = 5;
     valueInput.value = task.completion_value;
-    valueInput.addEventListener("change", () => {
+    valueInput.className = "completion-slider";
+    const valueBadge = document.createElement("span");
+    valueBadge.className = "badge badge-neutral";
+    valueBadge.textContent = `${valueInput.value}%`;
+    valueInput.addEventListener("input", () => {
       const normalized = normalizeCompletionValue(valueInput.value);
       valueInput.value = normalized;
+      valueBadge.textContent = `${normalized}%`;
       doneToggle.checked = normalized >= 100;
     });
+    valueInput.addEventListener("change", () => updateTaskCompletion(task.id, valueInput.value));
     doneToggle.onchange = () => {
       const nextValue = doneToggle.checked ? 100 : 0;
       valueInput.value = nextValue;
+      valueBadge.textContent = `${nextValue}%`;
       updateTaskCompletion(task.id, nextValue);
     };
     doneLabel.append(doneToggle, document.createTextNode("Галочка: выполнено"));
@@ -396,7 +393,7 @@ function renderTasks(tasks) {
     applyButton.type = "button";
     applyButton.textContent = "Обновить прогресс";
     applyButton.onclick = () => updateTaskCompletion(task.id, valueInput.value);
-    completionControls.append(doneLabel, valueInput, applyButton);
+    completionControls.append(doneLabel, valueInput, valueBadge, applyButton);
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.textContent = "Удалить";
@@ -445,27 +442,18 @@ function taskStatusLabel(status) {
 
 async function handleCreateHabit(event) {
   event.preventDefault();
-  const completionValueInput = document.getElementById("habit-completion-value");
-  const completionToggle = document.getElementById("habit-done");
-  let completion_value = normalizeCompletionValue(completionValueInput.value);
-  if (completionToggle?.checked) {
-    completion_value = 100;
-  }
-  completionValueInput.value = completion_value;
   const payload = {
     name: document.getElementById("habit-name").value,
     description: document.getElementById("habit-description").value,
     schedule_type: document.getElementById("habit-schedule").value,
     completion_mode: "percent",
-    completion_value,
+    completion_value: 0,
     is_active: true,
   };
   try {
     await apiFetch("/habits", { method: "POST", body: JSON.stringify(payload) });
     document.getElementById("habit-name").value = "";
     document.getElementById("habit-description").value = "";
-    completionValueInput.value = 0;
-    if (completionToggle) completionToggle.checked = false;
     setStatus("Привычка создана", "success");
     await loadHabits();
   } catch (error) {
@@ -536,7 +524,6 @@ function renderHabits(habits) {
         <span class="badge">${habit.schedule_type}</span>
       </header>
       <p>Статус: ${statusLabel}</p>
-      <p>Прогресс: <span class="badge badge-neutral">${habit.completion_value}%</span></p>
     `;
     const controls = document.createElement("div");
     controls.className = "actions stack";
@@ -548,18 +535,26 @@ function renderHabits(habits) {
     doneToggle.type = "checkbox";
     doneToggle.checked = habit.completion_value >= 100;
     const valueInput = document.createElement("input");
-    valueInput.type = "number";
+    valueInput.type = "range";
     valueInput.min = 0;
     valueInput.max = 100;
+    valueInput.step = 5;
     valueInput.value = habit.completion_value;
-    valueInput.addEventListener("change", () => {
+    valueInput.className = "completion-slider";
+    const valueBadge = document.createElement("span");
+    valueBadge.className = "badge badge-neutral";
+    valueBadge.textContent = `${valueInput.value}%`;
+    valueInput.addEventListener("input", () => {
       const normalized = normalizeCompletionValue(valueInput.value);
       valueInput.value = normalized;
+      valueBadge.textContent = `${normalized}%`;
       doneToggle.checked = normalized >= 100;
     });
+    valueInput.addEventListener("change", () => updateHabitCompletion(habit.id, valueInput.value));
     doneToggle.onchange = () => {
       const nextValue = doneToggle.checked ? 100 : 0;
       valueInput.value = nextValue;
+      valueBadge.textContent = `${nextValue}%`;
       updateHabitCompletion(habit.id, nextValue);
     };
     doneLabel.append(doneToggle, document.createTextNode("Галочка: выполнено"));
@@ -567,7 +562,7 @@ function renderHabits(habits) {
     applyButton.type = "button";
     applyButton.textContent = "Обновить прогресс";
     applyButton.onclick = () => updateHabitCompletion(habit.id, valueInput.value);
-    completionControls.append(doneLabel, valueInput, applyButton);
+    completionControls.append(doneLabel, valueInput, valueBadge, applyButton);
     const skipBtn = document.createElement("button");
     skipBtn.type = "button";
     skipBtn.textContent = "Пропустить";

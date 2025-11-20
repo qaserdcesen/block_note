@@ -92,8 +92,6 @@
               <label>Заголовок<input type="text" id="task-title" required placeholder="Написать план" /></label>
               <label>Описание<input type="text" id="task-description" placeholder="Контекст / шаги" /></label>
               <label>Приоритет (1-10)<input type="number" id="task-priority" min="1" max="10" value="5" /></label>
-              <label>Прогресс (0-100)<input type="number" id="task-completion-value" min="0" max="100" value="0" /></label>
-              <label class="checkbox-inline"><input type="checkbox" id="task-done" />Галочка: выполнено</label>
               <button type="submit">Добавить задачу</button>
             </form>
             <div class="list" id="tasks-list"></div>
@@ -116,8 +114,6 @@
                   <option value="custom">Custom</option>
                 </select>
               </label>
-              <label>Прогресс (0-100)<input type="number" id="habit-completion-value" min="0" max="100" value="0" /></label>
-              <label class="checkbox-inline"><input type="checkbox" id="habit-done" />Галочка: выполнено</label>
               <button type="submit">Создать привычку</button>
             </form>
             <div class="list" id="habits-list"></div>
