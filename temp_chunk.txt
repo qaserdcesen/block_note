@@ -1,0 +1,22 @@
+}
+
+function switchPage(targetId) {
+  const button = navButtons.find((btn) => btn.dataset.target === targetId);
+  const requiresAuth = button?.dataset.requiresAuth === "true";
+  if (requiresAuth && !state.token) {
+    setStatus("Нужен вход, чтобы открыть этот раздел.", "error");
+    targetId = "auth-page";
+  }
+  state.currentPage = targetId;
+  Object.entries(pages).forEach(([id, element]) => {
+    if (element) element.hidden = id !== targetId;
+  });
+  navButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.target === targetId);
+    if (btn.dataset.requiresAuth === "true") {
+      btn.disabled = !state.token;
+    }
+  });
+  updateGuards();
+}
+

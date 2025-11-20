@@ -158,12 +158,8 @@ function bindForms() {
   const habitModeSelect = document.getElementById("habit-completion-mode");
   const habitCompletionValue = document.getElementById("habit-completion-value");
 
-  if (taskModeSelect && taskCompletionValue) {
-    taskModeSelect.addEventListener("change", () => syncCompletionInput(taskModeSelect, taskCompletionValue));
-  }
-  if (habitModeSelect && habitCompletionValue) {
-    habitModeSelect.addEventListener("change", () => syncCompletionInput(habitModeSelect, habitCompletionValue));
-  }
+  taskModeSelect?.addEventListener("change", () => syncCompletionInput(taskModeSelect, taskCompletionValue));
+  habitModeSelect?.addEventListener("change", () => syncCompletionInput(habitModeSelect, habitCompletionValue));
 }
 
 function formatCompletionValue(mode, value) {
@@ -172,6 +168,7 @@ function formatCompletionValue(mode, value) {
 }
 
 function syncCompletionInput(modeSelect, valueInput) {
+  if (!modeSelect || !valueInput) return;
   const normalized = formatCompletionValue(modeSelect.value, valueInput.value);
   valueInput.value = normalized;
   valueInput.step = modeSelect.value === "binary" ? 100 : 5;
@@ -192,12 +189,8 @@ async function handleRegister(event) {
     setStatus("Введите e-mail и пароль", "error");
     return;
   }
-  if (state.telegramUser?.id) {
-    payload.telegram_id = state.telegramUser.id;
-  }
-  if (state.telegramUser?.username) {
-    payload.telegram_username = state.telegramUser.username;
-  }
+  if (state.telegramUser?.id) payload.telegram_id = state.telegramUser.id;
+  if (state.telegramUser?.username) payload.telegram_username = state.telegramUser.username;
   try {
     await fetchJson(`${apiBase}/auth/register`, { method: "POST", body: JSON.stringify(payload) });
     state.userTimezone = timezone;
@@ -239,9 +232,7 @@ async function fetchJson(url, options = {}) {
   }
 
   const response = await fetch(url, { ...options, headers });
-  if (response.status === 204) {
-    return null;
-  }
+  if (response.status === 204) return null;
 
   const rawText = await response.text();
   let data = null;
@@ -269,12 +260,13 @@ function formatErrorDetail(detail) {
   if (!detail) return "";
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
-    const first = detail[0];
-    if (typeof first === "string") return first;
-    if (first?.msg) return first.msg;
-    return detail.map((d) => d?.msg || JSON.stringify(d)).join("; ");
+    return detail
+      .map((d) => (typeof d === "string" ? d : d?.msg || d?.detail || JSON.stringify(d)))
+      .filter(Boolean)
+      .join("; ");
   }
-  if (detail.msg) return detail.msg;
+  if (detail?.msg) return detail.msg;
+  if (detail?.detail) return detail.detail;
   try {
     return JSON.stringify(detail);
   } catch {
@@ -336,6 +328,16 @@ function renderTasks(tasks) {
   }
 
   tasks.forEach((task) => {
+    const statusKey = task.completion_value >= 100 ? "done" : task.status;
+    const statusLabel = taskStatusLabel(statusKey);
+    const dueLabel = task.due_datetime
+      ? new Date(task.due_datetime).toLocaleString("ru-RU", {
+          hour: "2-digit",
+          minute: "2-digit",
+          month: "short",
+          day: "numeric",
+        })
+      : "Без срока";
     const card = document.createElement("article");
     card.className = "card entry";
     card.innerHTML = `
@@ -346,8 +348,15 @@ function renderTasks(tasks) {
         </div>
         <span class="badge">Приоритет ${task.priority}</span>
       </header>
-      <p>Статус: <span class="badge badge-neutral">${task.status}</span></p>
-      <p>Прогресс: ${task.completion_mode === "percent" ? `${task.completion_value}%` : task.completion_value >= 100 ? "Выполнено" : "Не выполнено"}</p>
+      <p>Статус: <span class="badge badge-neutral">${statusLabel}</span></p>
+      <p>Срок: <span class="badge badge-neutral">${dueLabel}</span></p>
+      <p>Прогресс: ${
+        task.completion_mode === "percent"
+          ? `${task.completion_value}%`
+          : task.completion_value >= 100
+          ? "Выполнено"
+          : "Не выполнено"
+      }</p>
     `;
 
     const controls = document.createElement("div");
@@ -358,7 +367,7 @@ function renderTasks(tasks) {
 
     const modeSelect = document.createElement("select");
     [
-      { value: "binary", label: "Бинарный" },
+      { value: "binary", label: "Бинарно" },
       { value: "percent", label: "Проценты" },
     ].forEach((option) => {
       const opt = document.createElement("option");
@@ -385,7 +394,7 @@ function renderTasks(tasks) {
 
     const doneButton = document.createElement("button");
     doneButton.type = "button";
-    doneButton.textContent = "Завершить";
+    doneButton.textContent = "Отметить выполненной";
     doneButton.onclick = () => updateTaskCompletion(task.id, "binary", 100);
 
     const deleteBtn = document.createElement("button");
@@ -402,9 +411,14 @@ function renderTasks(tasks) {
 async function updateTaskCompletion(taskId, mode, value) {
   try {
     const completion_value = formatCompletionValue(mode, value);
+    const payload = {
+      completion_mode: mode,
+      completion_value,
+      status: completion_value >= 100 ? "done" : completion_value > 0 ? "in_progress" : "pending",
+    };
     await apiFetch(`/tasks/${taskId}`, {
       method: "PATCH",
-      body: JSON.stringify({ completion_mode: mode, completion_value }),
+      body: JSON.stringify(payload),
     });
     setStatus("Прогресс задачи обновлён", "success");
     await loadTasks();
@@ -420,6 +434,16 @@ async function deleteTask(id) {
   } catch (error) {
     setStatus(error.message, "error");
   }
+}
+
+function taskStatusLabel(status) {
+  const map = {
+    pending: "Запланирована",
+    in_progress: "В работе",
+    done: "Выполнена",
+    cancelled: "Отменена",
+  };
+  return map[status] || "—";
 }
 
 async function handleCreateHabit(event) {
@@ -480,16 +504,16 @@ function habitStatusText(habit) {
 
   if (habit.completion_mode === "percent") {
     if (habit.completion_value >= 100) {
-      label = "Выполнено";
+      label = "Выполнена";
     } else if (habit.completion_value <= 0) {
-      label = "Не выполнено";
+      label = "Не выполнена";
     } else {
       label = `${habit.completion_value}%`;
     }
   } else if (log) {
-    label = log.status === "done" ? "Выполнено" : "Пропуск";
+    label = log.status === "done" ? "Выполнена" : "Пропуск";
   } else {
-    label = habit.completion_value >= 100 ? "Выполнено" : "Не выполнено";
+    label = habit.completion_value >= 100 ? "Выполнена" : "Не выполнена";
   }
 
   if (habit.schedule_type === "weekly" && log) {
@@ -530,7 +554,7 @@ function renderHabits(habits) {
     completionControls.className = "completion-controls";
     const modeSelect = document.createElement("select");
     [
-      { value: "binary", label: "Бинарный" },
+      { value: "binary", label: "Бинарно" },
       { value: "percent", label: "Проценты" },
     ].forEach((option) => {
       const opt = document.createElement("option");
@@ -637,7 +661,7 @@ function renderReminders(reminders) {
   reminders.forEach((reminder) => {
     const card = document.createElement("article");
     card.className = "card entry";
-    const dateStr = reminder.trigger_time ? new Date(reminder.trigger_time).toLocaleString() : "-";
+    const dateStr = reminder.trigger_time ? new Date(reminder.trigger_time).toLocaleString("ru-RU") : "-";
     card.innerHTML = `<strong>${reminder.type}</strong><p class="muted">${reminder.behavior_rule || ""}</p><p>Время: ${dateStr}</p>`;
     const actions = document.createElement("div");
     actions.className = "actions";
@@ -675,7 +699,7 @@ async function handleAssistant(event) {
       method: "POST",
       body: JSON.stringify({ user_message: message }),
     });
-    state.assistantHistory.unshift({ user: message, reply: response.reply, ts: new Date().toLocaleTimeString() });
+    state.assistantHistory.unshift({ user: message, reply: response.reply, ts: new Date().toLocaleTimeString("ru-RU") });
     renderAssistantHistory();
   } catch (error) {
     setStatus(error.message, "error");

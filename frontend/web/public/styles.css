@@ -106,6 +106,10 @@ body {
   gap: 14px;
 }
 
+.page[hidden] {
+  display: none !important;
+}
+
 .page-head {
   display: flex;
   justify-content: space-between;
