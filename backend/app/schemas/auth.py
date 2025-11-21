@@ -1,25 +1,15 @@
-﻿from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
-class UserRegister(BaseModel):
-    email: EmailStr
-    password: str
-    timezone: str = "UTC"
-    language: str = "en"
-    telegram_id: int | None = None
-    telegram_username: str | None = None
+class TelegramUser(BaseModel):
+    id: int
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    language_code: str | None = None
 
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class TokenPayload(BaseModel):
-    sub: str
-
+class TelegramAuthPayload(BaseModel):
+    user: TelegramUser
+    auth_date: int
+    hash: str

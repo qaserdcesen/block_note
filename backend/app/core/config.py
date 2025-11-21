@@ -10,9 +10,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Contextual Task & Habit Manager"
     database_url: str = "sqlite:///./data/app.db"
-    jwt_secret_key: str = "change-me"
-    jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60
+    telegram_bot_token: str = ""
     scheduler_timezone: str = "UTC"
     llm_provider: str = "mock"
 

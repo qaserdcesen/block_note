@@ -1,11 +1,11 @@
 # Contextual Task & Habit Manager
 
-Small personal assistant for tasks, habits, reminders, and a rule-based helper. Backend stays on FastAPI + SQLite; frontend now targets a Telegram Mini App (simple HTML/CSS/JS served from the backend).
+Small personal assistant for tasks, habits, reminders, and a rule-based helper. Backend stays on FastAPI + SQLite; frontend targets a Telegram mini-app served from the backend.
 
-## What’s inside
-- **backend/** — FastAPI app with REST endpoints, scheduling, and assistant logic.
-- **frontend/web/** — Telegram Mini App UI (no bundler). Served from `/web`.
-- **frontend/mobile/** — archived Expo/React Native drafts (kept for reference).
+## What's inside
+- **backend/** - FastAPI app with REST endpoints, scheduling, and assistant logic.
+- **frontend/web/** - Telegram mini-app UI (no bundler). Served from `/web`.
+- **frontend/mobile/** - archived Expo/React Native drafts kept for reference.
 
 ## Layout
 ```
@@ -30,7 +30,7 @@ pip install -r requirements.txt
 cp .env.example .env  # fill secrets/DB/timezone/LLM keys if needed
 ```
 
-Key `.env` values: `APP_NAME`, `DATABASE_URL` (default SQLite `data/app.db`), `JWT_SECRET_KEY`, `SCHEDULER_TIMEZONE`. LLM keys are optional unless you enable those code paths.
+Key `.env` values: `APP_NAME`, `DATABASE_URL` (default SQLite `data/app.db`), `TELEGRAM_BOT_TOKEN` (for Telegram signature checks; optional for local web runs), `SCHEDULER_TIMEZONE`. LLM keys are optional unless you enable those code paths.
 
 ## Run
 ```bash
@@ -45,15 +45,14 @@ On start:
 4. Telegram mini-app UI is served at `/web` (same host).
 
 ## API surface (v1)
-- `POST /api/v1/auth/register` — create user.
-- `POST /api/v1/auth/login` — obtain JWT.
-- `GET|POST|PATCH|DELETE /api/v1/tasks?date=YYYY-MM-DD` — tasks with priority 1–10 and completion tracking.
-- `GET|POST|PATCH /api/v1/habits` and `GET|POST /api/v1/habits/{habit_id}/logs` — habits + daily/weekly logs.
-- `GET|POST|PATCH|DELETE /api/v1/reminders` — time-based reminders.
-- `POST /api/v1/assistant/message` — rule-based assistant reply.
+- All endpoints expect raw `initData` from the Telegram WebApp in `X-Telegram-Init-Data`; the backend verifies it and auto-creates users by `telegram_id`.
+- `GET|POST|PATCH|DELETE /api/v1/tasks?date=YYYY-MM-DD` - tasks with priority 1-10 and completion tracking.
+- `GET|POST|PATCH /api/v1/habits` and `GET|POST /api/v1/habits/{habit_id}/logs` - habits + daily/weekly logs.
+- `GET|POST|PATCH|DELETE /api/v1/reminders` - time-based reminders.
+- `POST /api/v1/assistant/message` - rule-based assistant reply.
 
 ## Frontends
-- **Telegram Mini App (primary)**: `frontend/web/public` is static, uses Telegram WebApp API (themes, haptics) and works without a bundler. Open `/web` locally or set the same URL in BotFather as `Web App URL`.
+- **Telegram mini-app (primary)**: `frontend/web/public` is static, uses Telegram WebApp API (themes, haptics) and works without a bundler. Open `/web` locally or set the same URL in BotFather as `Web App URL`.
 - **Expo skeleton (archived)**: `frontend/mobile` keeps component drafts; not wired to the current flow.
 
 ## Notes for further work

@@ -20,6 +20,16 @@ def _normalize_enum_values(table: str, column: str) -> None:
         conn.commit()
 
 
+def _drop_column(table: str, column: str) -> None:
+    inspector = inspect(engine)
+    existing = {col["name"] for col in inspector.get_columns(table)}
+    if column not in existing:
+        return
+    with engine.connect() as conn:
+        conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
+        conn.commit()
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     # Lightweight migrations for SQLite/initial runs.
@@ -31,5 +41,7 @@ def init_db() -> None:
     _ensure_column("habits", "category_id", "category_id INTEGER REFERENCES categories(id)")
     _ensure_column("users", "telegram_id", "telegram_id BIGINT UNIQUE")
     _ensure_column("users", "telegram_username", "telegram_username VARCHAR(64)")
+    _drop_column("users", "email")
+    _drop_column("users", "hashed_password")
     _normalize_enum_values("tasks", "completion_mode")
     _normalize_enum_values("habits", "completion_mode")

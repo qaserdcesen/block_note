@@ -1,18 +1,17 @@
 ﻿from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict
 
 
 class UserBase(BaseModel):
-    email: EmailStr
-    timezone: str
-    language: str
-    telegram_id: int | None = None
+    telegram_id: int
     telegram_username: str | None = None
+    timezone: str = "UTC"
+    language: str = "en"
 
 
 class UserCreate(UserBase):
-    password: str
+    pass
 
 
 class UserRead(UserBase):

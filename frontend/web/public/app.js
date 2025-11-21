@@ -1,11 +1,9 @@
-﻿
 const apiBase = "/api/v1";
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const tg = window.Telegram?.WebApp;
 
 const state = {
-  token: localStorage.getItem("cthm_token"),
-  currentPage: "auth-page",
+  currentPage: "workspace-page",
   assistantHistory: [],
   habitStatuses: {},
   categories: [],
@@ -18,8 +16,6 @@ const el = (id) => document.getElementById(id);
 const statusEl = el("status");
 const currentUserEl = el("current-user");
 const timezoneIndicator = el("timezone-indicator");
-const workspaceGuard = el("workspace-guard");
-const assistantGuard = el("assistant-guard");
 const tasksList = el("tasks-list");
 const habitsList = el("habits-list");
 const remindersList = el("reminders-list");
@@ -36,7 +32,6 @@ const habitTagsSelect = el("habit-tags");
 const navButtons = Array.from(document.querySelectorAll(".nav-btn"));
 
 const pages = {
-  "auth-page": el("auth-page"),
   "workspace-page": el("workspace-page"),
   "assistant-page": el("assistant-page"),
 };
@@ -51,7 +46,7 @@ bindNav();
 bindForms();
 updatePanels();
 switchPage(state.currentPage);
-if (state.token) refreshAll();
+refreshAll();
 
 function initTelegram() {
   if (!tg) {
@@ -91,41 +86,21 @@ function setStatus(message, type = "info") {
 }
 
 function switchPage(targetId) {
-  const button = navButtons.find((btn) => btn.dataset.target === targetId);
-  const requiresAuth = button?.dataset.requiresAuth === "true";
-  if (requiresAuth && !state.token) {
-    setStatus("Нужно авторизоваться, чтобы открыть этот раздел", "error");
-    targetId = "auth-page";
-  }
   state.currentPage = targetId;
   Object.entries(pages).forEach(([id, element]) => element && (element.hidden = id !== targetId));
-  navButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.target === targetId);
-    if (btn.dataset.requiresAuth === "true") btn.disabled = !state.token;
-  });
-  updateGuards();
-}
-
-function updateGuards() {
-  const loggedIn = Boolean(state.token);
-  if (workspaceGuard) workspaceGuard.hidden = loggedIn;
-  if (assistantGuard) assistantGuard.hidden = loggedIn;
-  if (!loggedIn && state.currentPage !== "auth-page") switchPage("auth-page");
+  navButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.target === targetId));
+  updateUserMeta();
 }
 
 function updateUserMeta() {
-  const loggedIn = Boolean(state.token);
   const tgLabel = state.telegramUser?.username || state.telegramUser?.first_name || null;
-  const prefix = loggedIn ? "Вход выполнен" : "Гость";
-  currentUserEl.textContent = tgLabel ? `${prefix}: ${tgLabel}` : prefix;
+  const prefix = tgLabel ? `???????? (${tgLabel})` : "????????";
+  if (currentUserEl) currentUserEl.textContent = prefix;
   if (timezoneIndicator) timezoneIndicator.textContent = state.userTimezone || "UTC";
 }
 
 function updatePanels() {
-  const loggedIn = Boolean(state.token);
-  navButtons.forEach((btn) => btn.dataset.requiresAuth === "true" && (btn.disabled = !loggedIn));
   updateUserMeta();
-  updateGuards();
 }
 
 function bindNav() {
@@ -133,8 +108,6 @@ function bindNav() {
 }
 
 function bindForms() {
-  el("register-form")?.addEventListener("submit", handleRegister);
-  el("login-form")?.addEventListener("submit", handleLogin);
   el("task-form")?.addEventListener("submit", handleCreateTask);
   el("habit-form")?.addEventListener("submit", handleCreateHabit);
   el("reminder-form")?.addEventListener("submit", handleCreateReminder);
@@ -161,51 +134,8 @@ function linkCompletionInputs(valueInput, checkbox) {
   });
 }
 
-async function handleRegister(event) {
-  event.preventDefault();
-  const formData = new FormData(event.target);
-  const payload = {
-    email: (formData.get("email") || "").trim(),
-    password: (formData.get("password") || "").trim(),
-    timezone: formData.get("timezone") || state.userTimezone || "UTC",
-    language: formData.get("language") || "ru",
-  };
-  if (!payload.email || !payload.password) return setStatus("Введите e-mail и пароль", "error");
-  if (state.telegramUser?.id) payload.telegram_id = state.telegramUser.id;
-  if (state.telegramUser?.username) payload.telegram_username = state.telegramUser.username;
-  try {
-    await fetchJson(`${apiBase}/auth/register`, { method: "POST", body: JSON.stringify(payload) });
-    state.userTimezone = payload.timezone;
-    localStorage.setItem("cthm_timezone", payload.timezone);
-    updateUserMeta();
-    setStatus("Регистрация успешна, можно войти", "success");
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
-}
-
-async function handleLogin(event) {
-  event.preventDefault();
-  const formData = new FormData(event.target);
-  const payload = { email: formData.get("email"), password: formData.get("password") };
-  try {
-    const data = await fetchJson(`${apiBase}/auth/login`, { method: "POST", body: JSON.stringify(payload) });
-    state.token = data.access_token;
-    localStorage.setItem("cthm_token", state.token);
-    setStatus("Вход выполнен", "success");
-    updatePanels();
-    switchPage("workspace-page");
-    await refreshAll();
-  } catch (error) {
-    state.token = null;
-    localStorage.removeItem("cthm_token");
-    updatePanels();
-    setStatus(error.message, "error");
-  }
-}
 async function fetchJson(url, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-  if (state.token && !url.includes("/auth/")) headers.Authorization = `Bearer ${state.token}`;
   const response = await fetch(url, { ...options, headers });
   if (response.status === 204) return null;
   const rawText = await response.text();
@@ -218,12 +148,7 @@ async function fetchJson(url, options = {}) {
     }
   }
   if (!response.ok) {
-    const message = formatErrorDetail(data?.detail) || response.statusText || "Ошибка запроса";
-    if (response.status === 401) {
-      state.token = null;
-      localStorage.removeItem("cthm_token");
-      updatePanels();
-    }
+    const message = formatErrorDetail(data?.detail) || response.statusText || "?????? ???????";
     throw new Error(message);
   }
   return data;
@@ -232,7 +157,11 @@ async function fetchJson(url, options = {}) {
 function formatErrorDetail(detail) {
   if (!detail) return "";
   if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) return detail.map((d) => (typeof d === "string" ? d : d?.msg || d?.detail || JSON.stringify(d))).filter(Boolean).join("; ");
+  if (Array.isArray(detail))
+    return detail
+      .map((d) => (typeof d === "string" ? d : d?.msg || d?.detail || JSON.stringify(d)))
+      .filter(Boolean)
+      .join("; ");
   if (detail?.msg) return detail.msg;
   if (detail?.detail) return detail.detail;
   try {
@@ -248,7 +177,8 @@ const splitDateTimeParts = (iso) => {
   const [date, time] = iso.split("T");
   return { date: date || "", time: (time || "").slice(0, 5) };
 };
-const readSelectedValues = (selectEl) => (!selectEl ? [] : Array.from(selectEl.selectedOptions || []).map((o) => Number(o.value)).filter(Boolean));
+const readSelectedValues = (selectEl) =>
+  !selectEl ? [] : Array.from(selectEl.selectedOptions || []).map((o) => Number(o.value)).filter(Boolean);
 
 function populateSelect(selectEl, options, includeEmpty = true) {
   if (!selectEl) return;
@@ -256,7 +186,7 @@ function populateSelect(selectEl, options, includeEmpty = true) {
   if (includeEmpty) {
     const empty = document.createElement("option");
     empty.value = "";
-    empty.textContent = "Без категории";
+    empty.textContent = "??? ?????????";
     selectEl.appendChild(empty);
   }
   options.forEach((item) => {
@@ -298,11 +228,11 @@ async function handleCreateCategory(event) {
   event.preventDefault();
   const nameInput = el("category-name");
   const name = (nameInput?.value || "").trim();
-  if (!name) return setStatus("Добавьте название категории", "error");
+  if (!name) return setStatus("??????? ???????? ?????????", "error");
   try {
     await apiFetch("/categories", { method: "POST", body: JSON.stringify({ name }) });
     if (nameInput) nameInput.value = "";
-    setStatus("Категория сохранена", "success");
+    setStatus("????????? ?????????", "success");
     await loadTaxonomy();
     await Promise.all([loadTasks(), loadHabits()]);
   } catch (error) {
@@ -314,11 +244,11 @@ async function handleCreateTag(event) {
   event.preventDefault();
   const nameInput = el("tag-name");
   const name = (nameInput?.value || "").trim();
-  if (!name) return setStatus("Добавьте имя тега", "error");
+  if (!name) return setStatus("??????? ???", "error");
   try {
     await apiFetch("/tags", { method: "POST", body: JSON.stringify({ name }) });
     if (nameInput) nameInput.value = "";
-    setStatus("Тег сохранён", "success");
+    setStatus("??? ????????", "success");
     await loadTaxonomy();
     await Promise.all([loadTasks(), loadHabits()]);
   } catch (error) {
@@ -347,7 +277,6 @@ async function deleteTag(id) {
 }
 
 async function loadTaxonomy() {
-  if (!state.token) return;
   try {
     const [categories, tags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
     state.categories = categories || [];
@@ -363,7 +292,7 @@ function renderTaxonomy() {
   if (categoriesList) {
     categoriesList.innerHTML = "";
     if (!state.categories.length) {
-      categoriesList.innerHTML = '<p class="muted">Категорий пока нет</p>';
+      categoriesList.innerHTML = '<p class="muted">????????? ???? ???</p>';
     } else {
       state.categories.forEach((cat) => {
         const item = document.createElement("div");
@@ -373,7 +302,7 @@ function renderTaxonomy() {
         const remove = document.createElement("button");
         remove.type = "button";
         remove.className = "ghost-btn";
-        remove.textContent = "✕";
+        remove.textContent = "?";
         remove.onclick = () => deleteCategory(cat.id);
         item.append(label, remove);
         categoriesList.appendChild(item);
@@ -383,7 +312,7 @@ function renderTaxonomy() {
   if (tagsList) {
     tagsList.innerHTML = "";
     if (!state.tags.length) {
-      tagsList.innerHTML = '<p class="muted">Тегов пока нет</p>';
+      tagsList.innerHTML = '<p class="muted">????? ???? ???</p>';
     } else {
       state.tags.forEach((tag) => {
         const item = document.createElement("div");
@@ -393,7 +322,7 @@ function renderTaxonomy() {
         const remove = document.createElement("button");
         remove.type = "button";
         remove.className = "ghost-btn";
-        remove.textContent = "✕";
+        remove.textContent = "?";
         remove.onclick = () => deleteTag(tag.id);
         item.append(label, remove);
         tagsList.appendChild(item);
@@ -408,6 +337,7 @@ const syncCreationSelectors = () => {
   populateTagSelect(taskTagsSelect);
   populateTagSelect(habitTagsSelect);
 };
+
 async function handleCreateTask(event) {
   event.preventDefault();
   const payload = {
@@ -427,7 +357,7 @@ async function handleCreateTask(event) {
     el("task-description").value = "";
     if (taskCategorySelect) taskCategorySelect.value = "";
     if (taskTagsSelect) Array.from(taskTagsSelect.options).forEach((opt) => (opt.selected = false));
-    setStatus("Задача добавлена", "success");
+    setStatus("?????? ?????????", "success");
     await loadTasks();
   } catch (error) {
     setStatus(error.message, "error");
@@ -435,7 +365,6 @@ async function handleCreateTask(event) {
 }
 
 async function loadTasks() {
-  if (!state.token) return;
   const date = tasksDateInput?.value || today;
   try {
     const tasks = await apiFetch(`/tasks?date=${date}`);
@@ -446,10 +375,15 @@ async function loadTasks() {
   }
 }
 
+function taskStatusLabel(status) {
+  const map = { pending: "? ???????", in_progress: "? ??????", done: "??????", cancelled: "????????" };
+  return map[status] || "-";
+}
+
 function renderTasks(tasks) {
   tasksList.innerHTML = "";
   if (!tasks.length) {
-    tasksList.innerHTML = '<p class="muted">Нет задач на эту дату</p>';
+    tasksList.innerHTML = '<p class="muted">??? ????? ?? ???? ????</p>';
     return;
   }
   tasks.forEach((task) => {
@@ -457,9 +391,9 @@ function renderTasks(tasks) {
     const statusLabel = taskStatusLabel(statusKey);
     const dueLabel = task.due_datetime
       ? new Date(task.due_datetime).toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" })
-      : "Без срока";
-    const categoryLabel = task.category?.name || "Без категории";
-    const tagsLabel = task.tags?.length ? task.tags.map((t) => `#${t.name}`).join(", ") : "Теги не выбраны";
+      : "??? ?????";
+    const categoryLabel = task.category?.name || "??? ?????????";
+    const tagsLabel = task.tags?.length ? task.tags.map((t) => `#${t.name}`).join(", ") : "???? ?? ??????";
 
     const card = document.createElement("article");
     card.className = "card entry";
@@ -467,14 +401,14 @@ function renderTasks(tasks) {
       <header class="card-header">
         <div>
           <strong>${task.title}</strong>
-          <p class="muted">${task.description || "Без описания"}</p>
+          <p class="muted">${task.description || "??? ????????"}</p>
         </div>
-        <span class="badge">Приоритет ${task.priority}</span>
+        <span class="badge">????????? ${task.priority}</span>
       </header>
-      <p>Статус: <span class="badge badge-neutral">${statusLabel}</span></p>
-      <p>Срок: <span class="badge badge-neutral">${dueLabel}</span></p>
-      <p class="muted">Категория: ${categoryLabel}</p>
-      <p class="muted">Теги: ${tagsLabel}</p>
+      <p>??????: <span class="badge badge-neutral">${statusLabel}</span></p>
+      <p>????: <span class="badge badge-neutral">${dueLabel}</span></p>
+      <p class="muted">?????????: ${categoryLabel}</p>
+      <p class="muted">????: ${tagsLabel}</p>
     `;
     const controls = document.createElement("div");
     controls.className = "actions stack";
@@ -482,7 +416,7 @@ function renderTasks(tasks) {
     const editBtn = document.createElement("button");
     editBtn.type = "button";
     editBtn.className = "ghost-btn";
-    editBtn.textContent = "Редактировать";
+    editBtn.textContent = "?????????????";
     editBtn.onclick = () => openTaskEditor(task, card);
 
     const completionControls = document.createElement("div");
@@ -515,16 +449,16 @@ function renderTasks(tasks) {
       valueBadge.textContent = `${nextValue}%`;
       updateTaskCompletion(task.id, nextValue);
     };
-    doneLabel.append(doneToggle, document.createTextNode("Выполнено"));
+    doneLabel.append(doneToggle, document.createTextNode("??????"));
     const applyButton = document.createElement("button");
     applyButton.type = "button";
-    applyButton.textContent = "Обновить прогресс";
+    applyButton.textContent = "?????????";
     applyButton.onclick = () => updateTaskCompletion(task.id, valueInput.value);
     completionControls.append(doneLabel, valueInput, valueBadge, applyButton);
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
-    deleteBtn.textContent = "Удалить";
+    deleteBtn.textContent = "???????";
     deleteBtn.onclick = () => deleteTask(task.id);
     controls.append(editBtn, completionControls, deleteBtn);
 
@@ -567,24 +501,24 @@ function openTaskEditor(task, card) {
   const tagSelect = buildTagMultiSelect(task.tags?.map((t) => t.id) || []);
 
   form.append(
-    labelWrap("Название", titleInput),
-    labelWrap("Описание", descriptionInput),
-    labelWrap("Дата", dateInput),
-    labelWrap("Время", timeInput),
-    labelWrap("Приоритет (1-10)", priorityInput),
-    labelWrap("Категория", categorySelect),
-    labelWrap("Теги", tagSelect)
+    labelWrap("?????????", titleInput),
+    labelWrap("????????", descriptionInput),
+    labelWrap("????", dateInput),
+    labelWrap("?????", timeInput),
+    labelWrap("????????? (1-10)", priorityInput),
+    labelWrap("?????????", categorySelect),
+    labelWrap("????", tagSelect)
   );
 
   const actions = document.createElement("div");
   actions.className = "actions";
   const saveBtn = document.createElement("button");
   saveBtn.type = "submit";
-  saveBtn.textContent = "Сохранить";
+  saveBtn.textContent = "?????????";
   const cancelBtn = document.createElement("button");
   cancelBtn.type = "button";
   cancelBtn.className = "ghost-btn";
-  cancelBtn.textContent = "Отмена";
+  cancelBtn.textContent = "??????";
   cancelBtn.onclick = () => form.remove();
   actions.append(saveBtn, cancelBtn);
   form.append(actions);
@@ -608,7 +542,7 @@ function openTaskEditor(task, card) {
 async function saveTaskEdit(taskId, payload, formNode) {
   try {
     await apiFetch(`/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) });
-    setStatus("Задача обновлена", "success");
+    setStatus("?????? ?????????", "success");
     formNode?.remove();
     await loadTasks();
   } catch (error) {
@@ -621,7 +555,7 @@ async function updateTaskCompletion(taskId, value) {
     const completion_value = normalizeCompletionValue(value);
     const payload = { completion_mode: "percent", completion_value, status: completionStatusFromValue(completion_value) };
     await apiFetch(`/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) });
-    setStatus("Прогресс задачи обновлён", "success");
+    setStatus("???????? ?????? ????????", "success");
     await loadTasks();
   } catch (error) {
     setStatus(error.message, "error");
@@ -637,10 +571,6 @@ async function deleteTask(id) {
   }
 }
 
-function taskStatusLabel(status) {
-  const map = { pending: "В очереди", in_progress: "В работе", done: "Готово", cancelled: "Отменено" };
-  return map[status] || "-";
-}
 async function handleCreateHabit(event) {
   event.preventDefault();
   const payload = {
@@ -659,7 +589,7 @@ async function handleCreateHabit(event) {
     el("habit-description").value = "";
     if (habitCategorySelect) habitCategorySelect.value = "";
     if (habitTagsSelect) Array.from(habitTagsSelect.options).forEach((opt) => (opt.selected = false));
-    setStatus("Привычка добавлена", "success");
+    setStatus("???????? ?????????", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
@@ -667,7 +597,6 @@ async function handleCreateHabit(event) {
 }
 
 async function loadHabits() {
-  if (!state.token) return;
   try {
     const habits = await apiFetch("/habits");
     await loadHabitStatuses(habits || []);
@@ -697,10 +626,10 @@ function habitStatusText(habit) {
   const log = state.habitStatuses[habit.id];
   const statusKey = completionStatusFromValue(habit.completion_value);
   let label;
-  if (log?.status === "skipped") label = "Пропущено";
-  else if (statusKey === "done") label = "Готово";
+  if (log?.status === "skipped") label = "?????????";
+  else if (statusKey === "done") label = "??????";
   else if (statusKey === "in_progress") label = `${habit.completion_value}%`;
-  else label = "Не выполнено";
+  else label = "?? ?????????";
   if (habit.schedule_type === "weekly" && log) return `${label} (${log.date})`;
   return label;
 }
@@ -708,26 +637,26 @@ function habitStatusText(habit) {
 function renderHabits(habits) {
   habitsList.innerHTML = "";
   if (!habits.length) {
-    habitsList.innerHTML = '<p class="muted">Пока нет привычек</p>';
+    habitsList.innerHTML = '<p class="muted">??? ????????</p>';
     return;
   }
   habits.forEach((habit) => {
     const statusLabel = habitStatusText(habit);
-    const categoryLabel = habit.category?.name || "Без категории";
-    const tagsLabel = habit.tags?.length ? habit.tags.map((t) => `#${t.name}`).join(", ") : "Теги не выбраны";
+    const categoryLabel = habit.category?.name || "??? ?????????";
+    const tagsLabel = habit.tags?.length ? habit.tags.map((t) => `#${t.name}`).join(", ") : "???? ?? ??????";
     const card = document.createElement("article");
     card.className = "card entry";
     card.innerHTML = `
       <header class="card-header">
         <div>
           <strong>${habit.name}</strong>
-          <p class="muted">${habit.description || "Без описания"}</p>
+          <p class="muted">${habit.description || "??? ????????"}</p>
         </div>
         <span class="badge">${habit.schedule_type}</span>
       </header>
-      <p>Статус: ${statusLabel}</p>
-      <p class="muted">Категория: ${categoryLabel}</p>
-      <p class="muted">Теги: ${tagsLabel}</p>
+      <p>??????: ${statusLabel}</p>
+      <p class="muted">?????????: ${categoryLabel}</p>
+      <p class="muted">????: ${tagsLabel}</p>
     `;
 
     const controls = document.createElement("div");
@@ -736,7 +665,7 @@ function renderHabits(habits) {
     const editBtn = document.createElement("button");
     editBtn.type = "button";
     editBtn.className = "ghost-btn";
-    editBtn.textContent = "Редактировать";
+    editBtn.textContent = "?????????????";
     editBtn.onclick = () => openHabitEditor(habit, card);
 
     const completionControls = document.createElement("div");
@@ -769,16 +698,16 @@ function renderHabits(habits) {
       valueBadge.textContent = `${nextValue}%`;
       updateHabitCompletion(habit.id, nextValue);
     };
-    doneLabel.append(doneToggle, document.createTextNode("Выполнено"));
+    doneLabel.append(doneToggle, document.createTextNode("??????"));
     const applyButton = document.createElement("button");
     applyButton.type = "button";
-    applyButton.textContent = "Обновить прогресс";
+    applyButton.textContent = "?????????";
     applyButton.onclick = () => updateHabitCompletion(habit.id, valueInput.value);
     completionControls.append(doneLabel, valueInput, valueBadge, applyButton);
 
     const skipBtn = document.createElement("button");
     skipBtn.type = "button";
-    skipBtn.textContent = "Пропуск";
+    skipBtn.textContent = "??????????";
     skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
 
     controls.append(editBtn, completionControls, skipBtn);
@@ -800,9 +729,9 @@ function openHabitEditor(habit, card) {
   descInput.value = habit.description || "";
   const scheduleSelect = document.createElement("select");
   [
-    { value: "daily", label: "Каждый день" },
-    { value: "weekly", label: "Раз в неделю" },
-    { value: "custom", label: "Custom" },
+    { value: "daily", label: "?????? ????" },
+    { value: "weekly", label: "??? ? ??????" },
+    { value: "custom", label: "??????" },
   ].forEach(({ value, label }) => {
     const option = document.createElement("option");
     option.value = value;
@@ -817,23 +746,23 @@ function openHabitEditor(habit, card) {
   const tagSelect = buildTagMultiSelect(habit.tags?.map((t) => t.id) || []);
 
   form.append(
-    labelWrap("Название", nameInput),
-    labelWrap("Описание", descInput),
-    labelWrap("График", scheduleSelect),
-    labelWrap("Активна", activeToggle),
-    labelWrap("Категория", categorySelect),
-    labelWrap("Теги", tagSelect)
+    labelWrap("????????", nameInput),
+    labelWrap("????????", descInput),
+    labelWrap("??????????", scheduleSelect),
+    labelWrap("???????", activeToggle),
+    labelWrap("?????????", categorySelect),
+    labelWrap("????", tagSelect)
   );
 
   const actions = document.createElement("div");
   actions.className = "actions";
   const saveBtn = document.createElement("button");
   saveBtn.type = "submit";
-  saveBtn.textContent = "Сохранить";
+  saveBtn.textContent = "?????????";
   const cancelBtn = document.createElement("button");
   cancelBtn.type = "button";
   cancelBtn.className = "ghost-btn";
-  cancelBtn.textContent = "Отмена";
+  cancelBtn.textContent = "??????";
   cancelBtn.onclick = () => form.remove();
   actions.append(saveBtn, cancelBtn);
   form.append(actions);
@@ -852,10 +781,11 @@ function openHabitEditor(habit, card) {
   });
   card.appendChild(form);
 }
+
 async function saveHabitEdit(habitId, payload, formNode) {
   try {
     await apiFetch(`/habits/${habitId}`, { method: "PATCH", body: JSON.stringify(payload) });
-    setStatus("Привычка обновлена", "success");
+    setStatus("???????? ?????????", "success");
     formNode?.remove();
     await loadHabits();
   } catch (error) {
@@ -867,7 +797,7 @@ async function updateHabitCompletion(habitId, value) {
   try {
     const completion_value = normalizeCompletionValue(value);
     await apiFetch(`/habits/${habitId}`, { method: "PATCH", body: JSON.stringify({ completion_mode: "percent", completion_value }) });
-    setStatus("Прогресс привычки обновлён", "success");
+    setStatus("???????? ???????? ????????", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
@@ -877,7 +807,7 @@ async function updateHabitCompletion(habitId, value) {
 async function logHabitStatus(habitId, status) {
   try {
     await apiFetch(`/habits/${habitId}/logs`, { method: "POST", body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), status }) });
-    setStatus("Статус привычки отмечен", "success");
+    setStatus("?????? ???????? ????????", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
@@ -887,11 +817,11 @@ async function logHabitStatus(habitId, status) {
 async function handleCreateReminder(event) {
   event.preventDefault();
   const trigger = isoFromDateTime(reminderDate.value, reminderTime.value);
-  const note = el("reminder-note").value || "Напоминание";
+  const note = el("reminder-note").value || "???????????";
   const payload = { type: "time", trigger_time: trigger, trigger_timezone: state.userTimezone || "UTC", is_active: true, behavior_rule: note };
   try {
     await apiFetch("/reminders", { method: "POST", body: JSON.stringify(payload) });
-    setStatus("Напоминание добавлено", "success");
+    setStatus("??????????? ?????????", "success");
     await loadReminders();
   } catch (error) {
     setStatus(error.message, "error");
@@ -899,7 +829,6 @@ async function handleCreateReminder(event) {
 }
 
 async function loadReminders() {
-  if (!state.token) return;
   try {
     const reminders = await apiFetch("/reminders");
     renderReminders(reminders || []);
@@ -912,18 +841,18 @@ async function loadReminders() {
 function renderReminders(reminders) {
   remindersList.innerHTML = "";
   if (!reminders.length) {
-    remindersList.innerHTML = '<p class="muted">Пока нет напоминаний</p>';
+    remindersList.innerHTML = '<p class="muted">??? ???????????</p>';
     return;
   }
   reminders.forEach((reminder) => {
     const card = document.createElement("article");
     card.className = "card entry";
     const dateStr = reminder.trigger_time ? new Date(reminder.trigger_time).toLocaleString("ru-RU") : "-";
-    card.innerHTML = `<strong>${reminder.type}</strong><p class="muted">${reminder.behavior_rule || ""}</p><p>Когда: ${dateStr}</p>`;
+    card.innerHTML = `<strong>${reminder.type}</strong><p class="muted">${reminder.behavior_rule || ""}</p><p>????: ${dateStr}</p>`;
     const actions = document.createElement("div");
     actions.className = "actions";
     const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "Удалить";
+    deleteBtn.textContent = "???????";
     deleteBtn.onclick = () => deleteReminder(reminder.id);
     actions.appendChild(deleteBtn);
     card.appendChild(actions);
@@ -942,11 +871,6 @@ async function deleteReminder(id) {
 
 async function handleAssistant(event) {
   event.preventDefault();
-  if (!state.token) {
-    setStatus("Нужно авторизоваться, чтобы пользоваться ассистентом", "error");
-    switchPage("auth-page");
-    return;
-  }
   const messageInput = el("assistant-message");
   const message = messageInput.value.trim();
   if (!message) return;
@@ -963,13 +887,13 @@ async function handleAssistant(event) {
 function renderAssistantHistory() {
   assistantHistoryEl.innerHTML = "";
   if (!state.assistantHistory.length) {
-    assistantHistoryEl.innerHTML = '<p class="muted">История пуста</p>';
+    assistantHistoryEl.innerHTML = '<p class="muted">??????? ?????</p>';
     return;
   }
   state.assistantHistory.forEach((item) => {
     const card = document.createElement("article");
     card.className = "card entry";
-    card.innerHTML = `<p><strong>Вы:</strong> ${item.user}</p><p><strong>Ответ:</strong> ${item.reply}</p><small class="muted">${item.ts}</small>`;
+    card.innerHTML = `<p><strong>??:</strong> ${item.user}</p><p><strong>?????:</strong> ${item.reply}</p><small class="muted">${item.ts}</small>`;
     assistantHistoryEl.appendChild(card);
   });
 }
@@ -979,7 +903,6 @@ async function apiFetch(path, options = {}) {
 }
 
 async function refreshAll() {
-  if (!state.token) return;
   await loadTaxonomy();
   await Promise.all([loadTasks(), loadHabits(), loadReminders()]);
 }
