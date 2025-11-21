@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Contextual Planner - Telegram Mini App</title>
+    <title>Contextual Planner — Telegram Mini App</title>
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
@@ -14,11 +14,11 @@
           <p class="eyebrow">Telegram Mini App</p>
           <h1>Contextual Planner</h1>
           <p class="subtitle">
-            Локальный запуск без регистрации. Telegram initData подключим позже; сейчас просто используйте веб-интерфейс.
+            Мини-приложение для задач, привычек и напоминаний рядом с Telegram. Поддерживает initData, но можно работать и как гость.
           </p>
         </div>
         <div class="hero__badges">
-          <span class="pill" id="current-user">Локально</span>
+          <span class="pill" id="current-user">Гость</span>
           <span class="pill pill-ghost" id="timezone-indicator">UTC</span>
         </div>
       </header>
@@ -29,27 +29,27 @@
         <section class="page" id="workspace-page">
           <div class="page-head page-head__compact">
             <div>
-              <p class="eyebrow">Рабочая область</p>
-              <h2>Задачи, привычки, напоминания</h2>
-              <p class="muted">Работает локально; позже будет интеграция с Telegram.</p>
+              <p class="eyebrow">Рабочая зона</p>
+              <h2>Задачи, привычки и напоминания</h2>
+              <p class="muted">Быстрый ввод списка дел для мини-приложения Telegram.</p>
             </div>
           </div>
 
           <article class="card" id="taxonomy-section">
             <header class="section-head">
               <div>
-                <p class="eyebrow">Категории и тэги</p>
-                <h3>Наводим порядок</h3>
+                <p class="eyebrow">Категории и теги</p>
+                <h3>Управление метками</h3>
               </div>
             </header>
             <form id="category-form" class="form-grid">
-              <label>Название категории<input type="text" id="category-name" placeholder="Работа / дом" /></label>
+              <label>Новая категория<input type="text" id="category-name" placeholder="Проекты / Дом" /></label>
               <button type="submit">Добавить категорию</button>
             </form>
             <div class="chip-stack" id="categories-list"></div>
             <form id="tag-form" class="form-grid">
-              <label>Тэг<input type="text" id="tag-name" placeholder="#важное" /></label>
-              <button type="submit">Добавить тэг</button>
+              <label>Новый тег<input type="text" id="tag-name" placeholder="#важно" /></label>
+              <button type="submit">Добавить тег</button>
             </form>
             <div class="chip-stack" id="tags-list"></div>
           </article>
@@ -57,7 +57,7 @@
           <article class="card" id="tasks-section">
             <header class="section-head">
               <div>
-                <p class="eyebrow">План дня</p>
+                <p class="eyebrow">Список задач</p>
                 <h3>Задачи</h3>
               </div>
               <div class="inline-input">
@@ -67,11 +67,11 @@
             </header>
             <form id="task-form" class="form-grid">
               <label>Время<input type="time" id="task-time" /></label>
-              <label>Заголовок задачи<input type="text" id="task-title" required placeholder="Например: митап" /></label>
-              <label>Описание<input type="text" id="task-description" placeholder="Короткий контекст" /></label>
+              <label>Название задачи<input type="text" id="task-title" required placeholder="Например: звонок" /></label>
+              <label>Описание<input type="text" id="task-description" placeholder="Контекст или заметка" /></label>
               <label>Приоритет (1-10)<input type="number" id="task-priority" min="1" max="10" value="5" /></label>
               <label>Категория<select id="task-category"></select></label>
-              <label>Тэги<select id="task-tags" multiple size="3"></select></label>
+              <label>Теги<select id="task-tags" multiple size="3"></select></label>
               <button type="submit">Добавить задачу</button>
             </form>
             <div class="list" id="tasks-list"></div>
@@ -81,21 +81,21 @@
             <header class="section-head">
               <div>
                 <p class="eyebrow">Привычки</p>
-                <h3>Повторяющиеся активности</h3>
+                <h3>Регулярные действия</h3>
               </div>
             </header>
             <form id="habit-form" class="form-grid">
               <label>Название<input type="text" id="habit-name" required placeholder="Например: зарядка" /></label>
-              <label>Описание<input type="text" id="habit-description" placeholder="5 минут > чем 0 минут" /></label>
-              <label>Расписание
+              <label>Описание<input type="text" id="habit-description" placeholder="5 минут или «после кофе»" /></label>
+              <label>График
                 <select id="habit-schedule">
                   <option value="daily">Каждый день</option>
                   <option value="weekly">Раз в неделю</option>
-                  <option value="custom">Custom</option>
+                  <option value="custom">Произвольно</option>
                 </select>
               </label>
               <label>Категория<select id="habit-category"></select></label>
-              <label>Тэги<select id="habit-tags" multiple size="3"></select></label>
+              <label>Теги<select id="habit-tags" multiple size="3"></select></label>
               <button type="submit">Добавить привычку</button>
             </form>
             <div class="list" id="habits-list"></div>
@@ -105,13 +105,13 @@
             <header class="section-head">
               <div>
                 <p class="eyebrow">Напоминания</p>
-                <h3>Держим в поле зрения</h3>
+                <h3>Запланировать напоминание</h3>
               </div>
             </header>
               <form id="reminder-form" class="form-grid">
               <label>Дата<input type="date" id="reminder-date" required /></label>
               <label>Время<input type="time" id="reminder-time" required /></label>
-              <label>Заметка<input type="text" id="reminder-note" placeholder="Что нужно сделать" /></label>
+              <label>Текст<input type="text" id="reminder-note" placeholder="Что нужно напомнить" /></label>
               <button type="submit">Добавить напоминание</button>
             </form>
             <div class="list" id="reminders-list"></div>
@@ -121,9 +121,9 @@
         <section class="page" id="assistant-page" hidden>
           <div class="page-head page-head__compact">
             <div>
-              <p class="eyebrow">Assistant</p>
-              <h2>Чат с помощником</h2>
-              <p class="muted">Rule-based логика на backend.</p>
+              <p class="eyebrow">Ассистент</p>
+              <h2>Простой ассистент</h2>
+              <p class="muted">Правила и ответы на стороне backend.</p>
             </div>
           </div>
           <article class="card">
@@ -137,8 +137,8 @@
       </main>
 
       <nav class="tabbar">
-        <button class="nav-btn active" data-target="workspace-page">Рабочая область</button>
-        <button class="nav-btn" data-target="assistant-page">Помощник</button>
+        <button class="nav-btn active" data-target="workspace-page">Рабочая зона</button>
+        <button class="nav-btn" data-target="assistant-page">Ассистент</button>
       </nav>
     </div>
 
