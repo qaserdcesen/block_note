@@ -369,6 +369,12 @@ button:disabled {
   box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.35);
 }
 
+.nav-create {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
 .nav-btn {
   border-radius: 14px;
   border: 1px solid var(--stroke);
@@ -384,6 +390,62 @@ button:disabled {
   color: var(--accent-text);
   border-color: transparent;
   box-shadow: 0 10px 30px rgba(107, 139, 255, 0.35);
+}
+
+.creation-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translate(-50%, 8px);
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow);
+  width: min(360px, 92vw);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 5;
+}
+
+.creation-menu.open {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.creation-menu__title {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.creation-menu__options {
+  display: grid;
+  gap: 8px;
+}
+
+.menu-btn {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: none;
+}
+
+.menu-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.menu-btn:active {
+  transform: translateY(1px);
 }
 
 select[multiple] {

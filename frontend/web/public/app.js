@@ -6,7 +6,7 @@ const ADD_CATEGORY_VALUE = "__add_category__";
 const ADD_TAG_VALUE = "__add_tag__";
 
 const state = {
-  currentPage: "workspace-page",
+  currentPage: "tasks-page",
   assistantHistory: [],
   habitStatuses: {},
   categories: [],
@@ -32,11 +32,19 @@ const taskCategorySelect = el("task-category");
 const habitCategorySelect = el("habit-category");
 const taskTagsSelect = el("task-tags");
 const habitTagsSelect = el("habit-tags");
-const navButtons = Array.from(document.querySelectorAll(".nav-btn"));
+const navProfileBtn = el("nav-profile");
+const navCreateBtn = el("nav-create");
+const navAssistantBtn = el("nav-assistant");
+const creationMenu = el("creation-menu");
+const creationOptions = Array.from(document.querySelectorAll(".creation-option"));
+const creationPages = ["tasks-page", "habits-page", "reminders-page"];
 
 const pages = {
-  "workspace-page": el("workspace-page"),
+  "tasks-page": el("tasks-page"),
+  "habits-page": el("habits-page"),
+  "reminders-page": el("reminders-page"),
   "assistant-page": el("assistant-page"),
+  "profile-page": el("profile-page"),
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -91,8 +99,30 @@ function setStatus(message, type = "info") {
 function switchPage(targetId) {
   state.currentPage = targetId;
   Object.entries(pages).forEach(([id, element]) => element && (element.hidden = id !== targetId));
-  navButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.target === targetId));
+  [navProfileBtn, navAssistantBtn, navCreateBtn].forEach((btn) => btn?.classList.remove("active"));
+  if (creationPages.includes(targetId)) navCreateBtn?.classList.add("active");
+  else if (targetId === "assistant-page") navAssistantBtn?.classList.add("active");
+  else if (targetId === "profile-page") navProfileBtn?.classList.add("active");
+  closeCreationMenu();
   updateUserMeta();
+}
+
+function openCreationMenu() {
+  if (!creationMenu) return;
+  creationMenu.hidden = false;
+  requestAnimationFrame(() => creationMenu.classList.add("open"));
+}
+
+function closeCreationMenu() {
+  if (!creationMenu) return;
+  creationMenu.classList.remove("open");
+  creationMenu.hidden = true;
+}
+
+function toggleCreationMenu() {
+  if (!creationMenu) return;
+  if (creationMenu.hidden) openCreationMenu();
+  else closeCreationMenu();
 }
 
 function updateUserMeta() {
@@ -108,7 +138,21 @@ function updatePanels() {
 }
 
 function bindNav() {
-  navButtons.forEach((btn) => btn.addEventListener("click", () => switchPage(btn.dataset.target)));
+  navProfileBtn?.addEventListener("click", () => switchPage("profile-page"));
+  navAssistantBtn?.addEventListener("click", () => switchPage("assistant-page"));
+  navCreateBtn?.addEventListener("click", toggleCreationMenu);
+  creationOptions.forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.target;
+      if (target) switchPage(target);
+    })
+  );
+  document.addEventListener("click", (event) => {
+    if (!creationMenu || !navCreateBtn) return;
+    const target = event.target;
+    if (creationMenu.contains(target) || navCreateBtn.contains(target)) return;
+    closeCreationMenu();
+  });
 }
 
 function bindForms() {

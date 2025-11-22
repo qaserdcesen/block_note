@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Contextual Planner — Telegram Mini App</title>
+    <title>Contextual Planner - Telegram Mini App</title>
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
@@ -12,9 +12,10 @@
       <header class="hero">
         <div class="hero__title">
           <p class="eyebrow">Telegram Mini App</p>
-          <h1>Contextual Planner</h1>
+          <h1>Контекстный планировщик</h1>
           <p class="subtitle">
-            Быстро создавайте задачи, привычки и напоминания прямо в Telegram. Приложение читает initData и работает с backend без лишних шагов.
+            Управляйте задачами, привычками и напоминаниями прямо в Telegram. Приложение ждёт initData и подключение к backend,
+            чтобы подгружать живые данные.
           </p>
         </div>
         <div class="hero__badges">
@@ -26,50 +27,67 @@
       <div class="status-banner" id="status" aria-live="polite" data-type="info">Готово к работе</div>
 
       <main class="pages">
-        <section class="page" id="workspace-page">
+        <section class="page" id="tasks-page">
           <div class="page-head page-head__compact">
             <div>
-              <p class="eyebrow">Рабочее пространство</p>
-              <h2>Задачи, привычки и напоминания</h2>
-              <p class="muted">Создавайте и отмечайте прогресс, не покидая Telegram.</p>
+              <p class="eyebrow">Создание</p>
+              <h2>Задачи</h2>
+              <p class="muted">Создавайте, просматривайте и редактируйте задачи на выбранную дату.</p>
+            </div>
+            <div class="inline-input">
+              <label for="tasks-date">Дата</label>
+              <input type="date" id="tasks-date" required />
             </div>
           </div>
 
           <article class="card" id="tasks-section">
-            <header class="section-head">
-              <div>
-                <p class="eyebrow">Задачи</p>
-                <h3>Запланировать день</h3>
-              </div>
-              <div class="inline-input">
-                <label for="tasks-date">Дата</label>
-                <input type="date" id="tasks-date" required />
-              </div>
-            </header>
+            <header class="section-head"><h3>Новая задача</h3></header>
             <form id="task-form" class="form-grid">
               <label>Время<input type="time" id="task-time" /></label>
               <label>Название задачи<input type="text" id="task-title" required placeholder="Например: созвон с командой" /></label>
-              <label>Описание<input type="text" id="task-description" placeholder="Детали или чек-лист" /></label>
+              <label>Описание<input type="text" id="task-description" placeholder="Что нужно сделать" /></label>
               <label>Приоритет (1-10)<input type="number" id="task-priority" min="1" max="10" value="5" /></label>
               <label>Категория<select id="task-category"></select></label>
               <label>Теги<select id="task-tags" multiple size="4"></select></label>
-              <button type="submit">Добавить задачу</button>
+              <button type="submit">Сохранить задачу</button>
             </form>
-            <p class="muted">Можно сразу выбрать или создать категорию/теги из выпадающего списка.</p>
+            <p class="muted">Форма остаётся открытой для добавления нескольких задач подряд.</p>
             <div class="list" id="tasks-list"></div>
           </article>
+
+          <article class="card" id="taxonomy-section">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Справочник</p>
+                <h3>Категории и теги</h3>
+                <p class="muted">Используйте категории и теги, чтобы быстрее фильтровать задачи и привычки.</p>
+              </div>
+            </header>
+            <div class="chip-stack" id="categories-list"></div>
+            <div class="chip-stack" id="tags-list"></div>
+          </article>
+        </section>
+
+        <section class="page" id="habits-page" hidden>
+          <div class="page-head page-head__compact">
+            <div>
+              <p class="eyebrow">Создание</p>
+              <h2>Привычки</h2>
+              <p class="muted">Отслеживайте регулярные действия и их статусы.</p>
+            </div>
+          </div>
 
           <article class="card" id="habits-section">
             <header class="section-head">
               <div>
                 <p class="eyebrow">Привычки</p>
-                <h3>Ежедневные повторения</h3>
+                <h3>Создание и прогресс</h3>
               </div>
             </header>
             <form id="habit-form" class="form-grid">
               <label>Название привычки<input type="text" id="habit-name" required placeholder="Например: зарядка утром" /></label>
-              <label>Описание<input type="text" id="habit-description" placeholder="Короткое пояснение" /></label>
-              <label>Расписание
+              <label>Описание<input type="text" id="habit-description" placeholder="Зачем это нужно" /></label>
+              <label>График
                 <select id="habit-schedule">
                   <option value="daily">Каждый день</option>
                   <option value="weekly">Раз в неделю</option>
@@ -78,36 +96,33 @@
               </label>
               <label>Категория<select id="habit-category"></select></label>
               <label>Теги<select id="habit-tags" multiple size="4"></select></label>
-              <button type="submit">Добавить привычку</button>
+              <button type="submit">Сохранить привычку</button>
             </form>
-            <p class="muted">Категории и теги добавляются прямо при выборе.</p>
+            <p class="muted">Категории и теги подтягиваются из справочника задач.</p>
             <div class="list" id="habits-list"></div>
           </article>
+        </section>
 
-          <article class="card" id="taxonomy-section">
-            <header class="section-head">
-              <div>
-                <p class="eyebrow">Справочник</p>
-                <h3>Категории и теги</h3>
-                <p class="muted">Все, что вы создали в формах выше. Можно удалить, если больше не нужно.</p>
-              </div>
-            </header>
-            <div class="chip-stack" id="categories-list"></div>
-            <div class="chip-stack" id="tags-list"></div>
-          </article>
-
+        <section class="page" id="reminders-page" hidden>
+          <div class="page-head page-head__compact">
+            <div>
+              <p class="eyebrow">Создание</p>
+              <h2>Напоминания</h2>
+              <p class="muted">Планируйте одноразовые и повторяющиеся напоминания.</p>
+            </div>
+          </div>
           <article class="card" id="reminders-section">
             <header class="section-head">
               <div>
                 <p class="eyebrow">Напоминания</p>
-                <h3>Держим в фокусе</h3>
+                <h3>Сигналы и триггеры</h3>
               </div>
             </header>
             <form id="reminder-form" class="form-grid">
               <label>Дата<input type="date" id="reminder-date" required /></label>
               <label>Время<input type="time" id="reminder-time" required /></label>
-              <label>Сообщение<input type="text" id="reminder-note" placeholder="Что напомнить?" /></label>
-              <button type="submit">Добавить напоминание</button>
+              <label>Заметка<input type="text" id="reminder-note" placeholder="О чём напомнить?" /></label>
+              <button type="submit">Сохранить напоминание</button>
             </form>
             <div class="list" id="reminders-list"></div>
           </article>
@@ -117,23 +132,47 @@
           <div class="page-head page-head__compact">
             <div>
               <p class="eyebrow">Ассистент</p>
-              <h2>Подсказки и действия</h2>
-              <p class="muted">Задавайте вопросы — ответы приходят из backend.</p>
+              <h2>Подсказки и ответы</h2>
+              <p class="muted">Напишите запрос — остальное заберёт на себя backend.</p>
             </div>
           </div>
           <article class="card">
             <form id="assistant-form" class="assistant-form">
-              <label>Сообщение ассистенту<input type="text" id="assistant-message" placeholder="Например: предложи план на день" required /></label>
+              <label>Сообщение ассистенту<input type="text" id="assistant-message" placeholder="Например: составь план на день" required /></label>
               <button type="submit">Отправить</button>
             </form>
             <div class="list" id="assistant-history"></div>
           </article>
         </section>
+
+        <section class="page" id="profile-page" hidden>
+          <div class="page-head page-head__compact">
+            <div>
+              <p class="eyebrow">Профиль</p>
+              <h2>Личные данные</h2>
+              <p class="muted">Заглушка: позже здесь будут настройки аккаунта, уведомлений и интеграций.</p>
+            </div>
+          </div>
+          <article class="card notice">
+            <p><strong>Профиль в разработке.</strong> Сейчас доступна только навигация по созданию задач, привычек и напоминаний.</p>
+          </article>
+        </section>
       </main>
 
       <nav class="tabbar">
-        <button class="nav-btn active" data-target="workspace-page">Рабочее пространство</button>
-        <button class="nav-btn" data-target="assistant-page">Ассистент</button>
+        <button class="nav-btn" id="nav-profile" data-target="profile-page" type="button">Профиль</button>
+        <div class="nav-create">
+          <button class="nav-btn" id="nav-create" type="button">Создание</button>
+          <div class="creation-menu" id="creation-menu" hidden>
+            <p class="creation-menu__title">Что создаём?</p>
+            <div class="creation-menu__options">
+              <button class="menu-btn creation-option" data-target="tasks-page" type="button">Задача</button>
+              <button class="menu-btn creation-option" data-target="habits-page" type="button">Привычки</button>
+              <button class="menu-btn creation-option" data-target="reminders-page" type="button">Напоминания</button>
+            </div>
+          </div>
+        </div>
+        <button class="nav-btn" id="nav-assistant" data-target="assistant-page" type="button">Ассистент</button>
       </nav>
     </div>
 
