@@ -306,6 +306,21 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.card-body {
+  display: grid;
+  gap: 8px;
+}
+
+.card.collapsed .card-body {
+  display: none;
+}
+
+.collapse-btn {
+  min-width: 110px;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
 .badge {
   display: inline-block;
   padding: 4px 8px;

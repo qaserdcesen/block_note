@@ -4,12 +4,13 @@ import { FlatList, StyleSheet, View } from "react-native";
 import TaskItem, { TaskItemProps } from "../components/TaskItem";
 
 const mockTasks: TaskItemProps[] = [
-  { id: "1", title: "Prepare weekly report", status: "pending" },
-  { id: "2", title: "Go to the gym", status: "done" },
+  { id: "1", title: "Подготовить еженедельный отчёт", status: "in_progress" },
+  { id: "2", title: "Запланировать звонок с командой", status: "pending" },
+  { id: "3", title: "Сходить в спортзал", status: "done" },
 ];
 
 const TasksScreen = () => {
-  // TODO: fetch /api/v1/tasks with the selected date
+  // TODO: получать /api/v1/tasks с учётом выбранной даты
   return (
     <View style={styles.container}>
       <FlatList data={mockTasks} renderItem={({ item }) => <TaskItem {...item} />} keyExtractor={(item) => item.id} />

@@ -7,8 +7,8 @@ const ChatScreen = () => {
 
   const sendMessage = () => {
     if (!message.trim()) return;
-    setHistory((prev) => [...prev, `You: ${message}`]);
-    // TODO: POST /api/v1/assistant/message and append assistant reply
+    setHistory((prev) => [...prev, `Вы: ${message}`]);
+    // TODO: POST /api/v1/assistant/message и добавить ответ ассистента
     setMessage("");
   };
 
@@ -21,11 +21,11 @@ const ChatScreen = () => {
       </View>
       <TextInput
         style={styles.input}
-        placeholder="Ask the assistant..."
+        placeholder="Спросите ассистента..."
         value={message}
         onChangeText={setMessage}
       />
-      <Button title="Send" onPress={sendMessage} />
+      <Button title="Отправить" onPress={sendMessage} />
     </View>
   );
 };

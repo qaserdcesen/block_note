@@ -3,15 +3,15 @@ import { StyleSheet, Text, View } from "react-native";
 
 const SettingsScreen = () => (
   <View style={styles.container}>
-    {/* TODO: manage notification channels and user profile */}
-    <Text style={styles.heading}>Settings</Text>
-    <Text>Profile, localization, timezone, notification channels</Text>
+    {/* TODO: управление каналами уведомлений и профилем пользователя */}
+    <Text style={styles.heading}>Настройки</Text>
+    <Text>Профиль, локализация, часовой пояс и каналы уведомлений.</Text>
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, gap: 12 },
-  heading: { fontSize: 22, fontWeight: "600" },
+  container: { flex: 1, padding: 16 },
+  heading: { fontSize: 22, fontWeight: "600", marginBottom: 6 },
 });
 
 export default SettingsScreen;

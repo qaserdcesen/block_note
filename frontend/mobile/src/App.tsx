@@ -14,12 +14,12 @@ const Tab = createBottomTabNavigator();
 const App = () => (
   <NavigationContainer>
     <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Today" component={TodayScreen} />
-      <Tab.Screen name="Chat" component={ChatScreen} />
-      <Tab.Screen name="Tasks" component={TasksScreen} />
-      <Tab.Screen name="Habits" component={HabitsScreen} />
-      <Tab.Screen name="Reminders" component={RemindersScreen} />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen name="Сегодня" component={TodayScreen} />
+      <Tab.Screen name="Ассистент" component={ChatScreen} />
+      <Tab.Screen name="Задачи" component={TasksScreen} />
+      <Tab.Screen name="Привычки" component={HabitsScreen} />
+      <Tab.Screen name="Напоминания" component={RemindersScreen} />
+      <Tab.Screen name="Настройки" component={SettingsScreen} />
     </Tab.Navigator>
   </NavigationContainer>
 );

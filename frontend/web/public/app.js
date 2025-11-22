@@ -456,19 +456,34 @@ function renderTasks(tasks) {
 
     const card = document.createElement("article");
     card.className = "card entry";
-    card.innerHTML = `
-      <header class="card-header">
-        <div>
-          <strong>${task.title}</strong>
-          <p class="muted">${task.description || "Описание не заполнено"}</p>
-        </div>
-        <span class="badge">Приоритет ${task.priority}</span>
-      </header>
-      <p>Статус: <span class="badge badge-neutral">${statusLabel}</span></p>
-      <p>Срок: <span class="badge badge-neutral">${dueLabel}</span></p>
-      <p class="muted">Категория: ${categoryLabel}</p>
-      <p class="muted">Теги: ${tagsLabel}</p>
+
+    const header = document.createElement("header");
+    header.className = "card-header";
+
+    const titleWrap = document.createElement("div");
+    titleWrap.innerHTML = `
+      <strong>${task.title}</strong>
+      <p class="muted">${task.description || "Описание не заполнено"}</p>
     `;
+
+    const priorityBadge = document.createElement("span");
+    priorityBadge.className = "badge";
+    priorityBadge.textContent = `Приоритет ${task.priority}`;
+
+    const body = document.createElement("div");
+    body.className = "card-body";
+    const statusRow = document.createElement("p");
+    statusRow.innerHTML = `Статус: <span class="badge badge-neutral">${statusLabel}</span>`;
+    const dueRow = document.createElement("p");
+    dueRow.innerHTML = `Срок: <span class="badge badge-neutral">${dueLabel}</span>`;
+    const categoryRow = document.createElement("p");
+    categoryRow.className = "muted";
+    categoryRow.textContent = `Категория: ${categoryLabel}`;
+    const tagsRow = document.createElement("p");
+    tagsRow.className = "muted";
+    tagsRow.textContent = `Теги: ${tagsLabel}`;
+    body.append(statusRow, dueRow, categoryRow, tagsRow);
+
     const controls = document.createElement("div");
     controls.className = "actions stack";
 
@@ -517,7 +532,10 @@ function renderTasks(tasks) {
     deleteBtn.onclick = () => deleteTask(task.id);
     controls.append(editBtn, completionControls, deleteBtn);
 
-    card.appendChild(controls);
+    const collapseBtn = createCollapseToggle(card, body);
+    header.append(titleWrap, priorityBadge, collapseBtn);
+    card.append(header, body);
+    body.appendChild(controls);
     tasksList.appendChild(card);
   });
 }
@@ -528,6 +546,24 @@ const labelWrap = (text, control) => {
   label.append(control);
   return label;
 };
+
+function createCollapseToggle(card, body) {
+  let collapsed = false;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "ghost-btn collapse-btn";
+  const apply = () => {
+    body.hidden = collapsed;
+    card.classList.toggle("collapsed", collapsed);
+    btn.textContent = collapsed ? "Развернуть" : "Свернуть";
+  };
+  btn.addEventListener("click", () => {
+    collapsed = !collapsed;
+    apply();
+  });
+  apply();
+  return btn;
+}
 
 function openTaskEditor(task, card) {
   card.querySelectorAll(".inline-editor").forEach((el) => el.remove());
@@ -595,7 +631,8 @@ function openTaskEditor(task, card) {
     await saveTaskEdit(task.id, payload, form);
   });
 
-  card.appendChild(form);
+  const container = card.querySelector(".card-body") || card;
+  container.appendChild(form);
 }
 
 async function saveTaskEdit(taskId, payload, formNode) {
@@ -710,18 +747,28 @@ function renderHabits(habits) {
     const scheduleLabel = habitScheduleLabel(habit.schedule_type);
     const card = document.createElement("article");
     card.className = "card entry";
-    card.innerHTML = `
-      <header class="card-header">
-        <div>
-          <strong>${habit.name}</strong>
-          <p class="muted">${habit.description || "Описание не заполнено"}</p>
-        </div>
-        <span class="badge">${scheduleLabel}</span>
-      </header>
-      <p>Статус: ${statusLabel}</p>
-      <p class="muted">Категория: ${categoryLabel}</p>
-      <p class="muted">Теги: ${tagsLabel}</p>
+    const header = document.createElement("header");
+    header.className = "card-header";
+    const titleWrap = document.createElement("div");
+    titleWrap.innerHTML = `
+      <strong>${habit.name}</strong>
+      <p class="muted">${habit.description || "Описание не заполнено"}</p>
     `;
+    const scheduleBadge = document.createElement("span");
+    scheduleBadge.className = "badge";
+    scheduleBadge.textContent = scheduleLabel;
+
+    const body = document.createElement("div");
+    body.className = "card-body";
+    const statusRow = document.createElement("p");
+    statusRow.textContent = `Статус: ${statusLabel}`;
+    const categoryRow = document.createElement("p");
+    categoryRow.className = "muted";
+    categoryRow.textContent = `Категория: ${categoryLabel}`;
+    const tagsRow = document.createElement("p");
+    tagsRow.className = "muted";
+    tagsRow.textContent = `Теги: ${tagsLabel}`;
+    body.append(statusRow, categoryRow, tagsRow);
 
     const controls = document.createElement("div");
     controls.className = "actions stack";
@@ -771,7 +818,11 @@ function renderHabits(habits) {
     skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
 
     controls.append(editBtn, completionControls, skipBtn);
-    card.appendChild(controls);
+
+    const collapseBtn = createCollapseToggle(card, body);
+    header.append(titleWrap, scheduleBadge, collapseBtn);
+    card.append(header, body);
+    body.appendChild(controls);
     habitsList.appendChild(card);
   });
 }
@@ -843,7 +894,8 @@ function openHabitEditor(habit, card) {
     };
     await saveHabitEdit(habit.id, payload, form);
   });
-  card.appendChild(form);
+  const container = card.querySelector(".card-body") || card;
+  container.appendChild(form);
 }
 
 async function saveHabitEdit(habitId, payload, formNode) {
