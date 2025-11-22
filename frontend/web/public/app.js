@@ -1,6 +1,9 @@
-const apiBase = "/api/v1";
+﻿const apiBase = "/api/v1";
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const tg = window.Telegram?.WebApp;
+
+const ADD_CATEGORY_VALUE = "__add_category__";
+const ADD_TAG_VALUE = "__add_tag__";
 
 const state = {
   currentPage: "workspace-page",
@@ -95,7 +98,7 @@ function switchPage(targetId) {
 function updateUserMeta() {
   const rawTgLabel = state.telegramUser?.username || state.telegramUser?.first_name || null;
   const tgLabel = rawTgLabel ? (rawTgLabel.startsWith("@") ? rawTgLabel : `@${rawTgLabel}`) : null;
-  const prefix = tgLabel ? `Пользователь ${tgLabel}` : "Гость";
+  const prefix = tgLabel ? `Вы вошли как ${tgLabel}` : "Гость";
   if (currentUserEl) currentUserEl.textContent = prefix;
   if (timezoneIndicator) timezoneIndicator.textContent = state.userTimezone || "UTC";
 }
@@ -113,8 +116,6 @@ function bindForms() {
   el("habit-form")?.addEventListener("submit", handleCreateHabit);
   el("reminder-form")?.addEventListener("submit", handleCreateReminder);
   el("assistant-form")?.addEventListener("submit", handleAssistant);
-  el("category-form")?.addEventListener("submit", handleCreateCategory);
-  el("tag-form")?.addEventListener("submit", handleCreateTag);
   tasksDateInput?.addEventListener("change", loadTasks);
   linkCompletionInputs(el("task-completion-value"), el("task-done"));
   linkCompletionInputs(el("habit-completion-value"), el("habit-done"));
@@ -149,7 +150,7 @@ async function fetchJson(url, options = {}) {
     }
   }
   if (!response.ok) {
-    const message = formatErrorDetail(data?.detail) || response.statusText || "Не удалось выполнить запрос";
+    const message = formatErrorDetail(data?.detail) || response.statusText || "Что-то пошло не так";
     throw new Error(message);
   }
   return data;
@@ -181,79 +182,93 @@ const splitDateTimeParts = (iso) => {
 const readSelectedValues = (selectEl) =>
   !selectEl ? [] : Array.from(selectEl.selectedOptions || []).map((o) => Number(o.value)).filter(Boolean);
 
-function populateSelect(selectEl, options, includeEmpty = true) {
+function fillCategorySelect(selectEl, selectedId = null) {
   if (!selectEl) return;
   selectEl.innerHTML = "";
-  if (includeEmpty) {
-    const empty = document.createElement("option");
-    empty.value = "";
-    empty.textContent = "Без категории";
-    selectEl.appendChild(empty);
-  }
-  options.forEach((item) => {
-    const option = document.createElement("option");
-    option.value = item.id;
-    option.textContent = item.name;
+  const empty = new Option("Без категории", "");
+  const add = new Option("Добавить категорию", ADD_CATEGORY_VALUE);
+  selectEl.append(empty, add);
+  state.categories.forEach((item) => {
+    const option = new Option(item.name, item.id);
     selectEl.appendChild(option);
   });
+  if (selectedId) selectEl.value = String(selectedId);
+  if (!selectedId) selectEl.value = "";
 }
 
-function populateTagSelect(selectEl, selectedIds = []) {
+function fillTagSelect(selectEl, selectedIds = []) {
   if (!selectEl) return;
   selectEl.innerHTML = "";
+  const add = new Option("Добавить тег", ADD_TAG_VALUE);
+  selectEl.appendChild(add);
+  if (!state.tags.length) {
+    const placeholder = new Option("Тегов пока нет", "", false, false);
+    placeholder.disabled = true;
+    selectEl.appendChild(placeholder);
+  }
   state.tags.forEach((tag) => {
-    const option = document.createElement("option");
-    option.value = tag.id;
-    option.textContent = `#${tag.name}`;
+    const option = new Option(`#${tag.name}`, tag.id);
     option.selected = selectedIds.includes(tag.id);
     selectEl.appendChild(option);
   });
+  if (!selectedIds.length) selectEl.selectedIndex = -1;
 }
 
-const buildCategorySelect = (selectedId = null) => {
-  const select = document.createElement("select");
-  populateSelect(select, state.categories);
-  if (selectedId) select.value = String(selectedId);
-  return select;
-};
+function setupCategorySelect(selectEl, selectedId = null) {
+  if (!selectEl) return;
+  fillCategorySelect(selectEl, selectedId);
+  selectEl.onchange = async () => {
+    if (selectEl.value !== ADD_CATEGORY_VALUE) return;
+    const created = await promptCategoryCreation();
+    fillCategorySelect(selectEl, created?.id || null);
+    if (created?.id) selectEl.value = String(created.id);
+  };
+}
 
-const buildTagMultiSelect = (selectedIds = []) => {
-  const select = document.createElement("select");
-  select.multiple = true;
-  select.size = 4;
-  populateTagSelect(select, selectedIds);
-  return select;
-};
-
-async function handleCreateCategory(event) {
-  event.preventDefault();
-  const nameInput = el("category-name");
-  const name = (nameInput?.value || "").trim();
-  if (!name) return setStatus("Введите название категории", "error");
+function setupTagSelect(selectEl, selectedIds = []) {
+  if (!selectEl) return;
+  fillTagSelect(selectEl, selectedIds);
+  selectEl.onchange = async () => {
+    const selectedValues = Array.from(selectEl.selectedOptions || []).map((o) => o.value);
+    if (!selectedValues.includes(ADD_TAG_VALUE)) return;
+    const preserved = readSelectedValues(selectEl);
+    const created = await promptTagCreation();
+    const nextSelected = new Set(preserved);
+    if (created?.id) nextSelected.add(created.id);
+    fillTagSelect(selectEl, Array.from(nextSelected));
+  };
+}
+async function promptCategoryCreation() {
+  const name = (prompt("Введите название категории") || "").trim();
+  if (!name) {
+    setStatus("Название категории не может быть пустым", "error");
+    return null;
+  }
   try {
-    await apiFetch("/categories", { method: "POST", body: JSON.stringify({ name }) });
-    if (nameInput) nameInput.value = "";
+    const created = await apiFetch("/categories", { method: "POST", body: JSON.stringify({ name }) });
     setStatus("Категория добавлена", "success");
     await loadTaxonomy();
-    await Promise.all([loadTasks(), loadHabits()]);
+    return created;
   } catch (error) {
     setStatus(error.message, "error");
+    return null;
   }
 }
 
-async function handleCreateTag(event) {
-  event.preventDefault();
-  const nameInput = el("tag-name");
-  const name = (nameInput?.value || "").trim();
-  if (!name) return setStatus("Введите тег", "error");
+async function promptTagCreation() {
+  const name = (prompt("Введите название тега (без #)") || "").trim();
+  if (!name) {
+    setStatus("Название тега не может быть пустым", "error");
+    return null;
+  }
   try {
-    await apiFetch("/tags", { method: "POST", body: JSON.stringify({ name }) });
-    if (nameInput) nameInput.value = "";
+    const created = await apiFetch("/tags", { method: "POST", body: JSON.stringify({ name }) });
     setStatus("Тег добавлен", "success");
     await loadTaxonomy();
-    await Promise.all([loadTasks(), loadHabits()]);
+    return created;
   } catch (error) {
     setStatus(error.message, "error");
+    return null;
   }
 }
 
@@ -333,12 +348,11 @@ function renderTaxonomy() {
 }
 
 const syncCreationSelectors = () => {
-  populateSelect(taskCategorySelect, state.categories);
-  populateSelect(habitCategorySelect, state.categories);
-  populateTagSelect(taskTagsSelect);
-  populateTagSelect(habitTagsSelect);
+  setupCategorySelect(taskCategorySelect);
+  setupCategorySelect(habitCategorySelect);
+  setupTagSelect(taskTagsSelect);
+  setupTagSelect(habitTagsSelect);
 };
-
 async function handleCreateTask(event) {
   event.preventDefault();
   const payload = {
@@ -358,7 +372,7 @@ async function handleCreateTask(event) {
     el("task-description").value = "";
     if (taskCategorySelect) taskCategorySelect.value = "";
     if (taskTagsSelect) Array.from(taskTagsSelect.options).forEach((opt) => (opt.selected = false));
-    setStatus("Задача создана", "success");
+    setStatus("Задача добавлена", "success");
     await loadTasks();
   } catch (error) {
     setStatus(error.message, "error");
@@ -377,14 +391,14 @@ async function loadTasks() {
 }
 
 function taskStatusLabel(status) {
-  const map = { pending: "В ожидании", in_progress: "В работе", done: "Готово", cancelled: "Отменена" };
+  const map = { pending: "В ожидании", in_progress: "В работе", done: "Готово", cancelled: "Отменено" };
   return map[status] || "-";
 }
 
 function renderTasks(tasks) {
   tasksList.innerHTML = "";
   if (!tasks.length) {
-    tasksList.innerHTML = '<p class="muted">Для выбранной даты задач нет</p>';
+    tasksList.innerHTML = '<p class="muted">На выбранную дату задач нет</p>';
     return;
   }
   tasks.forEach((task) => {
@@ -402,7 +416,7 @@ function renderTasks(tasks) {
       <header class="card-header">
         <div>
           <strong>${task.title}</strong>
-          <p class="muted">${task.description || "Без описания"}</p>
+          <p class="muted">${task.description || "Описание не заполнено"}</p>
         </div>
         <span class="badge">Приоритет ${task.priority}</span>
       </header>
@@ -494,8 +508,12 @@ function openTaskEditor(task, card) {
   priorityInput.min = 1;
   priorityInput.max = 10;
   priorityInput.value = task.priority;
-  const categorySelect = buildCategorySelect(task.category_id);
-  const tagSelect = buildTagMultiSelect(task.tags?.map((t) => t.id) || []);
+  const categorySelect = document.createElement("select");
+  setupCategorySelect(categorySelect, task.category_id);
+  const tagSelect = document.createElement("select");
+  tagSelect.multiple = true;
+  tagSelect.size = 4;
+  setupTagSelect(tagSelect, task.tags?.map((t) => t.id) || []);
 
   form.append(
     labelWrap("Название", titleInput),
@@ -552,7 +570,7 @@ async function updateTaskCompletion(taskId, value) {
     const completion_value = normalizeCompletionValue(value);
     const payload = { completion_mode: "percent", completion_value, status: completionStatusFromValue(completion_value) };
     await apiFetch(`/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) });
-    setStatus("Прогресс по задаче обновлен", "success");
+    setStatus("Прогресс по задаче сохранен", "success");
     await loadTasks();
   } catch (error) {
     setStatus(error.message, "error");
@@ -567,7 +585,6 @@ async function deleteTask(id) {
     setStatus(error.message, "error");
   }
 }
-
 async function handleCreateHabit(event) {
   event.preventDefault();
   const payload = {
@@ -586,7 +603,7 @@ async function handleCreateHabit(event) {
     el("habit-description").value = "";
     if (habitCategorySelect) habitCategorySelect.value = "";
     if (habitTagsSelect) Array.from(habitTagsSelect.options).forEach((opt) => (opt.selected = false));
-    setStatus("Привычка создана", "success");
+    setStatus("Привычка добавлена", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
@@ -620,8 +637,8 @@ async function loadHabitStatuses(habits) {
 }
 
 function habitScheduleLabel(schedule) {
-  const map = { daily: "Каждый день", weekly: "Раз в неделю", custom: "Произвольно" };
-  return map[schedule] || "График не указан";
+  const map = { daily: "Каждый день", weekly: "Раз в неделю", custom: "Своя схема" };
+  return map[schedule] || "Не задано";
 }
 
 function habitStatusText(habit) {
@@ -631,7 +648,7 @@ function habitStatusText(habit) {
   if (log?.status === "skipped") label = "Пропущено";
   else if (statusKey === "done") label = "Готово";
   else if (statusKey === "in_progress") label = `${habit.completion_value}%`;
-  else label = "Не начата";
+  else label = "Пока не начата";
   if (habit.schedule_type === "weekly" && log?.date) return `${label} (${log.date})`;
   return label;
 }
@@ -639,7 +656,7 @@ function habitStatusText(habit) {
 function renderHabits(habits) {
   habitsList.innerHTML = "";
   if (!habits.length) {
-    habitsList.innerHTML = '<p class="muted">Пока нет привычек</p>';
+    habitsList.innerHTML = '<p class="muted">Привычек пока нет</p>';
     return;
   }
   habits.forEach((habit) => {
@@ -653,7 +670,7 @@ function renderHabits(habits) {
       <header class="card-header">
         <div>
           <strong>${habit.name}</strong>
-          <p class="muted">${habit.description || "Без описания"}</p>
+          <p class="muted">${habit.description || "Описание не заполнено"}</p>
         </div>
         <span class="badge">${scheduleLabel}</span>
       </header>
@@ -706,7 +723,7 @@ function renderHabits(habits) {
 
     const skipBtn = document.createElement("button");
     skipBtn.type = "button";
-    skipBtn.textContent = "Пропустить";
+    skipBtn.textContent = "Пропустить сегодня";
     skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
 
     controls.append(editBtn, completionControls, skipBtn);
@@ -730,7 +747,7 @@ function openHabitEditor(habit, card) {
   [
     { value: "daily", label: "Каждый день" },
     { value: "weekly", label: "Раз в неделю" },
-    { value: "custom", label: "Произвольно" },
+    { value: "custom", label: "Своя схема" },
   ].forEach(({ value, label }) => {
     const option = document.createElement("option");
     option.value = value;
@@ -741,13 +758,17 @@ function openHabitEditor(habit, card) {
   const activeToggle = document.createElement("input");
   activeToggle.type = "checkbox";
   activeToggle.checked = habit.is_active;
-  const categorySelect = buildCategorySelect(habit.category_id);
-  const tagSelect = buildTagMultiSelect(habit.tags?.map((t) => t.id) || []);
+  const categorySelect = document.createElement("select");
+  setupCategorySelect(categorySelect, habit.category_id);
+  const tagSelect = document.createElement("select");
+  tagSelect.multiple = true;
+  tagSelect.size = 4;
+  setupTagSelect(tagSelect, habit.tags?.map((t) => t.id) || []);
 
   form.append(
     labelWrap("Название", nameInput),
     labelWrap("Описание", descInput),
-    labelWrap("График", scheduleSelect),
+    labelWrap("Расписание", scheduleSelect),
     labelWrap("Активна", activeToggle),
     labelWrap("Категория", categorySelect),
     labelWrap("Теги", tagSelect)
@@ -796,7 +817,7 @@ async function updateHabitCompletion(habitId, value) {
   try {
     const completion_value = normalizeCompletionValue(value);
     await apiFetch(`/habits/${habitId}`, { method: "PATCH", body: JSON.stringify({ completion_mode: "percent", completion_value }) });
-    setStatus("Прогресс по привычке обновлен", "success");
+    setStatus("Прогресс по привычке сохранен", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
@@ -806,7 +827,7 @@ async function updateHabitCompletion(habitId, value) {
 async function logHabitStatus(habitId, status) {
   try {
     await apiFetch(`/habits/${habitId}/logs`, { method: "POST", body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), status }) });
-    setStatus("Статус привычки сохранен", "success");
+    setStatus("Статус привычки отмечен", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");
@@ -820,7 +841,7 @@ async function handleCreateReminder(event) {
   const payload = { type: "time", trigger_time: trigger, trigger_timezone: state.userTimezone || "UTC", is_active: true, behavior_rule: note };
   try {
     await apiFetch("/reminders", { method: "POST", body: JSON.stringify(payload) });
-    setStatus("Напоминание создано", "success");
+    setStatus("Напоминание добавлено", "success");
     await loadReminders();
   } catch (error) {
     setStatus(error.message, "error");
@@ -853,7 +874,7 @@ function renderReminders(reminders) {
     card.className = "card entry";
     const dateStr = reminder.trigger_time ? new Date(reminder.trigger_time).toLocaleString("ru-RU") : "-";
     const typeLabel = reminderTypeLabel(reminder.type);
-    card.innerHTML = `<strong>${typeLabel}</strong><p class="muted">${reminder.behavior_rule || ""}</p><p>Время: ${dateStr}</p>`;
+    card.innerHTML = `<strong>${typeLabel}</strong><p class="muted">${reminder.behavior_rule || ""}</p><p>Когда: ${dateStr}</p>`;
     const actions = document.createElement("div");
     actions.className = "actions";
     const deleteBtn = document.createElement("button");
@@ -892,13 +913,13 @@ async function handleAssistant(event) {
 function renderAssistantHistory() {
   assistantHistoryEl.innerHTML = "";
   if (!state.assistantHistory.length) {
-    assistantHistoryEl.innerHTML = '<p class="muted">Диалог пуст</p>';
+    assistantHistoryEl.innerHTML = '<p class="muted">История пока пустая</p>';
     return;
   }
   state.assistantHistory.forEach((item) => {
     const card = document.createElement("article");
     card.className = "card entry";
-    card.innerHTML = `<p><strong>Вы:</strong> ${item.user}</p><p><strong>Ответ:</strong> ${item.reply}</p><small class="muted">${item.ts}</small>`;
+    card.innerHTML = `<p><strong>Вы:</strong> ${item.user}</p><p><strong>Ассистент:</strong> ${item.reply}</p><small class="muted">${item.ts}</small>`;
     assistantHistoryEl.appendChild(card);
   });
 }

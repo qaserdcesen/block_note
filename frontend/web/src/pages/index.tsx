@@ -4,8 +4,8 @@ import Layout from "../components/Layout";
 import TaskList from "../components/TaskList";
 
 const tasks = [
-  { id: "1", title: "Write spec", status: "pending" },
-  { id: "2", title: "Sync with assistant", status: "done" },
+  { id: "1", title: "Написать спецификацию", status: "в работе" },
+  { id: "2", title: "Синк с ассистентом", status: "готово" },
 ];
 
 const IndexPage = () => (
