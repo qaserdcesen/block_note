@@ -315,6 +315,10 @@ button:disabled {
   display: none;
 }
 
+.card.collapsed .entry-description {
+  display: none;
+}
+
 .collapse-btn {
   min-width: 110px;
   white-space: nowrap;

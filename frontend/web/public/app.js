@@ -463,7 +463,7 @@ function renderTasks(tasks) {
     const titleWrap = document.createElement("div");
     titleWrap.innerHTML = `
       <strong>${task.title}</strong>
-      <p class="muted">${task.description || "Описание не заполнено"}</p>
+      <p class="muted entry-description">${task.description || "Описание не заполнено"}</p>
     `;
 
     const priorityBadge = document.createElement("span");
@@ -555,6 +555,7 @@ function createCollapseToggle(card, body) {
   const apply = () => {
     body.hidden = collapsed;
     card.classList.toggle("collapsed", collapsed);
+    card.querySelectorAll(".entry-description").forEach((el) => (el.hidden = collapsed));
     btn.textContent = collapsed ? "Развернуть" : "Свернуть";
   };
   btn.addEventListener("click", () => {
@@ -752,7 +753,7 @@ function renderHabits(habits) {
     const titleWrap = document.createElement("div");
     titleWrap.innerHTML = `
       <strong>${habit.name}</strong>
-      <p class="muted">${habit.description || "Описание не заполнено"}</p>
+      <p class="muted entry-description">${habit.description || "Описание не заполнено"}</p>
     `;
     const scheduleBadge = document.createElement("span");
     scheduleBadge.className = "badge";
