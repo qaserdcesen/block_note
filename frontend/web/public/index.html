@@ -51,7 +51,21 @@
               <label>Теги<select id="task-tags" multiple size="4"></select></label>
               <button type="submit">Сохранить задачу</button>
             </form>
-            <p class="muted">Форма остаётся открытой для добавления нескольких задач подряд.</p>
+            <div class="filters-row">
+              <label class="inline-input">Поиск (название, категория, теги)<input type="search" id="task-search" placeholder="Введите название или категорию" /></label>
+              <label class="inline-input">Сортировка
+                <select id="task-sort">
+                  <option value="priority_desc">По приоритету (высокий -> низкий)</option>
+                  <option value="priority_asc">По приоритету (низкий -> высокий)</option>
+                  <option value="date_asc">По дате (раньше -> позже)</option>
+                  <option value="date_desc">По дате (позже -> раньше)</option>
+                  <option value="category">По категории (А->Я)</option>
+                  <option value="tags">По тегам (А->Я)</option>
+                  <option value="title">По названию (А->Я)</option>
+                </select>
+              </label>
+            </div>
+            <p class="muted">Вы можете держать описания короткими и добавить детали позже: редактор доступен прямо в карточке задачи.</p>
             <div class="list" id="tasks-list"></div>
           </article>
 
@@ -86,8 +100,8 @@
             </header>
             <form id="habit-form" class="form-grid">
               <label>Название привычки<input type="text" id="habit-name" required placeholder="Например: зарядка утром" /></label>
-              <label>Описание<input type="text" id="habit-description" placeholder="Зачем это нужно" /></label>
-              <label>График
+              <label>Описание<input type="text" id="habit-description" placeholder="Кратко опишите суть" /></label>
+              <label>Режим
                 <select id="habit-schedule">
                   <option value="daily">Каждый день</option>
                   <option value="weekly">Раз в неделю</option>
@@ -98,7 +112,21 @@
               <label>Теги<select id="habit-tags" multiple size="4"></select></label>
               <button type="submit">Сохранить привычку</button>
             </form>
-            <p class="muted">Категории и теги подтягиваются из справочника задач.</p>
+            <div class="filters-row">
+              <label class="inline-input">Поиск (название, категория, теги)<input type="search" id="habit-search" placeholder="Введите название или категорию" /></label>
+              <label class="inline-input">Сортировка
+                <select id="habit-sort">
+                  <option value="name_asc">По названию (А->Я)</option>
+                  <option value="name_desc">По названию (Я->А)</option>
+                  <option value="category">По категории (А->Я)</option>
+                  <option value="tags">По тегам (А->Я)</option>
+                  <option value="log_date_desc">По дате отметки (новые сначала)</option>
+                  <option value="priority_desc">По приоритету (высокий -> низкий)</option>
+                  <option value="priority_asc">По приоритету (низкий -> высокий)</option>
+                </select>
+              </label>
+            </div>
+            <p class="muted">Категории и теги помогают группировать привычки.</p>
             <div class="list" id="habits-list"></div>
           </article>
         </section>

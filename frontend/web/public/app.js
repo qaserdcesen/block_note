@@ -9,8 +9,16 @@ const state = {
   currentPage: "tasks-page",
   assistantHistory: [],
   habitStatuses: {},
+  tasks: [],
+  habits: [],
   categories: [],
   tags: [],
+  ui: {
+    taskSearch: "",
+    taskSort: "priority_desc",
+    habitSearch: "",
+    habitSort: "name_asc",
+  },
   userTimezone: localStorage.getItem("cthm_timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   telegramUser: tg?.initDataUnsafe?.user || null,
 };
@@ -32,6 +40,10 @@ const taskCategorySelect = el("task-category");
 const habitCategorySelect = el("habit-category");
 const taskTagsSelect = el("task-tags");
 const habitTagsSelect = el("habit-tags");
+const taskSearchInput = el("task-search");
+const taskSortSelect = el("task-sort");
+const habitSearchInput = el("habit-search");
+const habitSortSelect = el("habit-sort");
 const navProfileBtn = el("nav-profile");
 const navCreateBtn = el("nav-create");
 const navAssistantBtn = el("nav-assistant");
@@ -55,6 +67,7 @@ if (reminderTime) reminderTime.value = "09:00";
 initTelegram();
 bindNav();
 bindForms();
+bindFilters();
 updatePanels();
 switchPage(state.currentPage);
 refreshAll();
@@ -163,6 +176,37 @@ function bindForms() {
   tasksDateInput?.addEventListener("change", loadTasks);
   linkCompletionInputs(el("task-completion-value"), el("task-done"));
   linkCompletionInputs(el("habit-completion-value"), el("habit-done"));
+}
+
+function bindFilters() {
+  if (taskSearchInput) {
+    taskSearchInput.value = state.ui.taskSearch;
+    taskSearchInput.addEventListener("input", () => {
+      state.ui.taskSearch = taskSearchInput.value.trim();
+      renderTasks(state.tasks);
+    });
+  }
+  if (taskSortSelect) {
+    taskSortSelect.value = state.ui.taskSort;
+    taskSortSelect.addEventListener("change", () => {
+      state.ui.taskSort = taskSortSelect.value;
+      renderTasks(state.tasks);
+    });
+  }
+  if (habitSearchInput) {
+    habitSearchInput.value = state.ui.habitSearch;
+    habitSearchInput.addEventListener("input", () => {
+      state.ui.habitSearch = habitSearchInput.value.trim();
+      renderHabits(state.habits);
+    });
+  }
+  if (habitSortSelect) {
+    habitSortSelect.value = state.ui.habitSort;
+    habitSortSelect.addEventListener("change", () => {
+      state.ui.habitSort = habitSortSelect.value;
+      renderHabits(state.habits);
+    });
+  }
 }
 
 const normalizeCompletionValue = (value) => clamp(Number(value) || 0, 0, 100);
@@ -427,9 +471,11 @@ async function loadTasks() {
   const date = tasksDateInput?.value || today;
   try {
     const tasks = await apiFetch(`/tasks?date=${date}`);
-    renderTasks(tasks || []);
+    state.tasks = tasks || [];
+    renderTasks(state.tasks);
   } catch (error) {
-    renderTasks([]);
+    state.tasks = [];
+    renderTasks(state.tasks);
     setStatus(error.message, "error");
   }
 }
@@ -440,12 +486,19 @@ function taskStatusLabel(status) {
 }
 
 function renderTasks(tasks) {
+  const search = (state.ui?.taskSearch || "").toLowerCase();
+  const sortKey = state.ui?.taskSort || "priority_desc";
+  const filtered = tasks.filter((task) =>
+    matchesSearch([task.title, task.category?.name, ...(task.tags?.map((t) => t.name) || [])], search),
+  );
+  const sorted = sortTasks(filtered, sortKey);
   tasksList.innerHTML = "";
-  if (!tasks.length) {
-    tasksList.innerHTML = '<p class="muted">На выбранную дату задач нет</p>';
+  if (!sorted.length) {
+    const message = tasks.length ? "Ничего не найдено по текущему поиску или сортировке" : "На выбранную дату задач нет";
+    tasksList.innerHTML = `<p class="muted">${message}</p>`;
     return;
   }
-  tasks.forEach((task) => {
+  sorted.forEach((task) => {
     const statusKey = completionStatusFromValue(task.completion_value);
     const statusLabel = taskStatusLabel(statusKey);
     const dueLabel = task.due_datetime
@@ -695,10 +748,12 @@ async function handleCreateHabit(event) {
 async function loadHabits() {
   try {
     const habits = await apiFetch("/habits");
-    await loadHabitStatuses(habits || []);
-    renderHabits(habits || []);
+    state.habits = habits || [];
+    await loadHabitStatuses(state.habits);
+    renderHabits(state.habits);
   } catch (error) {
-    renderHabits([]);
+    state.habits = [];
+    renderHabits(state.habits);
     setStatus(error.message, "error");
   }
 }
@@ -736,12 +791,19 @@ function habitStatusText(habit) {
 }
 
 function renderHabits(habits) {
+  const search = (state.ui?.habitSearch || "").toLowerCase();
+  const sortKey = state.ui?.habitSort || "name_asc";
+  const filtered = habits.filter((habit) =>
+    matchesSearch([habit.name, habit.category?.name, ...(habit.tags?.map((t) => t.name) || [])], search),
+  );
+  const sorted = sortHabits(filtered, sortKey);
   habitsList.innerHTML = "";
-  if (!habits.length) {
-    habitsList.innerHTML = '<p class="muted">Привычек пока нет</p>';
+  if (!sorted.length) {
+    const message = habits.length ? "Ничего не найдено по текущему поиску или сортировке" : "Привычек пока нет";
+    habitsList.innerHTML = `<p class="muted">${message}</p>`;
     return;
   }
-  habits.forEach((habit) => {
+  sorted.forEach((habit) => {
     const statusLabel = habitStatusText(habit);
     const categoryLabel = habit.category?.name || "Без категории";
     const tagsLabel = habit.tags?.length ? habit.tags.map((t) => `#${t.name}`).join(", ") : "Теги не выбраны";
@@ -826,6 +888,72 @@ function renderHabits(habits) {
     body.appendChild(controls);
     habitsList.appendChild(card);
   });
+}
+
+function compareStrings(a, b) {
+  return (a || "").localeCompare(b || "", "ru", { sensitivity: "base" });
+}
+
+const tagsValue = (tags) =>
+  tags?.length ? tags.map((t) => t?.name || "").filter(Boolean).sort(compareStrings).join(", ") : "";
+
+function matchesSearch(parts, search) {
+  if (!search) return true;
+  const haystack = parts.filter(Boolean).join(" ").toLowerCase();
+  return haystack.includes(search);
+}
+
+function sortTasks(list, sortKey) {
+  const items = [...list];
+  const dateValue = (task, fallback) => (task.due_datetime ? new Date(task.due_datetime).getTime() : fallback);
+  items.sort((a, b) => {
+    switch (sortKey) {
+      case "priority_asc":
+        return (a.priority ?? 0) - (b.priority ?? 0);
+      case "date_asc":
+        return dateValue(a, Number.MAX_SAFE_INTEGER) - dateValue(b, Number.MAX_SAFE_INTEGER);
+      case "date_desc":
+        return dateValue(b, -Infinity) - dateValue(a, -Infinity);
+      case "category":
+        return compareStrings(a.category?.name, b.category?.name);
+      case "tags":
+        return compareStrings(tagsValue(a.tags), tagsValue(b.tags));
+      case "title":
+        return compareStrings(a.title, b.title);
+      case "priority_desc":
+      default:
+        return (b.priority ?? 0) - (a.priority ?? 0);
+    }
+  });
+  return items;
+}
+
+function sortHabits(list, sortKey) {
+  const items = [...list];
+  const logDateValue = (habit, fallback) => {
+    const logDate = state.habitStatuses?.[habit.id]?.date;
+    return logDate ? new Date(logDate).getTime() : fallback;
+  };
+  items.sort((a, b) => {
+    switch (sortKey) {
+      case "priority_desc":
+        return (b.priority ?? 0) - (a.priority ?? 0);
+      case "priority_asc":
+        return (a.priority ?? 0) - (b.priority ?? 0);
+      case "category":
+        return compareStrings(a.category?.name, b.category?.name);
+      case "tags":
+        return compareStrings(tagsValue(a.tags), tagsValue(b.tags));
+      case "log_date_desc":
+        return logDateValue(b, -Infinity) - logDateValue(a, -Infinity);
+      case "name_desc":
+        return compareStrings(b.name, a.name);
+      case "name_asc":
+      default:
+        return compareStrings(a.name, b.name);
+    }
+  });
+  return items;
 }
 
 function openHabitEditor(habit, card) {
