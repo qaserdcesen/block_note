@@ -1128,7 +1128,7 @@ async function handleAssistant(event) {
   messageInput.value = "";
   try {
     const response = await apiFetch("/assistant/message", { method: "POST", body: JSON.stringify({ user_message: message }) });
-    state.assistantHistory.unshift({ user: message, reply: response.reply, ts: new Date().toLocaleTimeString("ru-RU") });
+    state.assistantHistory.push({ user: message, reply: response.reply, ts: new Date().toISOString() });
     renderAssistantHistory();
   } catch (error) {
     setStatus(error.message, "error");
@@ -1142,11 +1142,18 @@ function renderAssistantHistory() {
     return;
   }
   state.assistantHistory.forEach((item) => {
-    const card = document.createElement("article");
-    card.className = "card entry";
-    card.innerHTML = `<p><strong>Вы:</strong> ${item.user}</p><p><strong>Ассистент:</strong> ${item.reply}</p><small class="muted">${item.ts}</small>`;
-    assistantHistoryEl.appendChild(card);
+    const userBubble = document.createElement("div");
+    userBubble.className = "assistant-bubble user";
+    userBubble.innerHTML = `<div>${item.user}</div><span class="assistant-meta">${new Date(item.ts).toLocaleTimeString("ru-RU")}</span>`;
+
+    const botBubble = document.createElement("div");
+    botBubble.className = "assistant-bubble assistant";
+    botBubble.innerHTML = `<div>${item.reply}</div><span class="assistant-meta">${new Date(item.ts).toLocaleTimeString("ru-RU")}</span>`;
+
+    assistantHistoryEl.appendChild(userBubble);
+    assistantHistoryEl.appendChild(botBubble);
   });
+  assistantHistoryEl.scrollTop = assistantHistoryEl.scrollHeight;
 }
 
 async function apiFetch(path, options = {}) {

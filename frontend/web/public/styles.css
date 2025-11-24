@@ -217,10 +217,63 @@ body {
 }
 
 .assistant-form {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 12px;
-}
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    align-items: center;
+  }
+  .assistant-form input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .assistant-form button {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 18px;
+    padding: 0;
+  }
+  .assistant-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 360px;
+  }
+  .assistant-history {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    padding: 6px 2px;
+  }
+  .assistant-bubble {
+    max-width: 78%;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: #f7f8fb;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+  .assistant-bubble.user {
+    margin-left: auto;
+    background: linear-gradient(135deg, #4f46e5, #6d28d9);
+    color: #fff;
+    border: none;
+  }
+  .assistant-bubble.assistant {
+    margin-right: auto;
+    background: #ffffff;
+    color: #111827;
+  }
+  .assistant-meta {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+  }
 
 label {
   display: grid;
