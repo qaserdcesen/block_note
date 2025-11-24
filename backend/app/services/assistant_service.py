@@ -2,20 +2,24 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.llm_client import LLMClient
+from app.models.category import Category
 from app.models.habit import Habit, HabitSchedule
 from app.models.message import Message, MessageRole
 from app.models.reminder import ReminderType
+from app.models.tag import Tag
 from app.models.task import Task
 from app.models.user import User
+from app.schemas.category import CategoryCreate
 from app.schemas.habit import HabitCreate
 from app.schemas.reminder import ReminderCreate
+from app.schemas.tag import TagCreate
 from app.schemas.task import TaskCreate
-from app.services import habit_service, reminder_service, task_service
+from app.services import category_service, habit_service, reminder_service, task_service, tag_service
 
 settings = get_settings()
 llm_client = LLMClient()
@@ -55,6 +59,54 @@ def _load_recent_messages(db: Session, user_id: int, limit: int = 10) -> List[Me
     )
     messages = list(db.execute(stmt).scalars().all())
     return list(reversed(messages))
+
+
+def _get_or_create_category(db: Session, user: User, name: str) -> tuple[Category, bool]:
+    normalized = name.strip()
+    if not normalized:
+        raise ValueError("Empty category name")
+    existing = (
+        db.execute(select(Category).where(Category.user_id == user.id).where(func.lower(Category.name) == normalized.lower()))
+        .scalar_one_or_none()
+    )
+    if existing:
+        return existing, False
+    category = category_service.create_category(db, CategoryCreate(user_id=user.id, name=normalized))
+    return category, True
+
+
+def _get_or_create_tags(db: Session, user: User, raw_tags: list[str]) -> tuple[list[Tag], list[str]]:
+    created: list[str] = []
+    result: list[Tag] = []
+    for raw in raw_tags:
+        name = raw.strip()
+        if not name:
+            continue
+        existing = (
+            db.execute(select(Tag).where(Tag.user_id == user.id).where(func.lower(Tag.name) == name.lower()))
+            .scalar_one_or_none()
+        )
+        if existing:
+            result.append(existing)
+            continue
+        tag = tag_service.create_tag(db, TagCreate(user_id=user.id, name=name))
+        result.append(tag)
+        created.append(tag.name)
+    return result, created
+
+
+def _extract_tag_names(raw_tags: Optional[object]) -> list[str]:
+    if raw_tags is None:
+        return []
+    if isinstance(raw_tags, str):
+        return [part.strip() for part in raw_tags.split(",") if part.strip()]
+    if isinstance(raw_tags, list):
+        names: list[str] = []
+        for item in raw_tags:
+            if isinstance(item, str) and item.strip():
+                names.append(item.strip())
+        return names
+    return []
 
 
 def _format_task_line(task: Task) -> str:
@@ -115,22 +167,33 @@ def _build_state_snapshot(db: Session, user_id: int) -> str:
     return "\n".join(parts)
 
 
+def _normalize_schedule(raw: str) -> HabitSchedule:
+    value = (raw or "").lower()
+    if any(keyword in value for keyword in ["week", "нед", "еженед"]):
+        return HabitSchedule.WEEKLY
+    if any(keyword in value for keyword in ["custom", "сво", "индив", "шаблон"]):
+        return HabitSchedule.CUSTOM
+    return HabitSchedule.DAILY
+
+
 def _build_system_prompt(user: Optional[User], snapshot: str) -> str:
     tz = (user.timezone if user and user.timezone else settings.scheduler_timezone) or "UTC"
     language = "Russian"
     return (
-        "You are an AI assistant for a productivity app (tasks/reminders/habits). "
-        f"Prefer replying in {language} and keep answers concise unless the user asks for another language. "
-        "Always respond with JSON containing keys reply and actions. "
-        "actions is an array. Allowed type values: create_task, create_reminder, create_habit. "
-        "create_task fields: title (required), description (optional), "
-        "due_datetime (ISO 8601 with timezone), priority (1-5), reminder_time (ISO for a quick reminder for the task). "
-        "create_reminder fields: trigger_time (ISO 8601), timezone (e.g., Europe/Moscow), "
-        "task_title (optional to link to an existing or new task). "
-        "create_habit fields: name (required), description (optional), schedule_type (daily/weekly/custom; default daily). "
-        "If no actions are needed, return actions: []. Use the snapshot only; do not invent data. "
-        f"User timezone: {tz}. "
-        "Data snapshot:\n"
+        "Ты ИИ-ассистент планировщика с доступом к БД (задачи/привычки/напоминания). "
+        f"Отвечай кратко на {language}, строго JSON с ключами reply и actions. "
+        "actions — массив. Допустимые type: create_task, create_reminder, create_habit. "
+        "create_task поля: title (обязательно), description (опционально), "
+        "due_datetime (ISO 8601 с таймзоной), priority (1-10), category (опционально, создай если нет), "
+        "tags (строка через запятую или массив, создай теги если их нет), reminder_time (ISO для быстрого напоминания). "
+        "create_reminder поля: trigger_time (ISO 8601), timezone (например Europe/Moscow), "
+        "task_title (опционально, создай задачу если её нет), note (заметка для напоминания). "
+        "create_habit поля: name (обязательно), description (опционально), "
+        "schedule_type (daily/weekly/custom), category (опционально, создай если нет), "
+        "tags (строка/массив, создай если нет). "
+        "Если действий не нужно, верни actions: []. Не выдумывай данные — опирайся на снимок БД и запрос пользователя. "
+        f"Часовой пояс пользователя: {tz}. "
+        "Снимок данных:\n"
         f"{snapshot}"
     )
 
@@ -187,8 +250,23 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
             if due_dt is None:
                 # Ensure tasks show up in today's list by default.
                 due_dt = datetime.now(timezone.utc)
+            category_id = None
+            extra_notes: list[str] = []
+            category_name = action.get("category") or action.get("category_name")
+            if isinstance(category_name, str) and category_name.strip():
+                category_obj, created_cat = _get_or_create_category(db, user, category_name)
+                category_id = category_obj.id
+                if created_cat:
+                    extra_notes.append(f"category \"{category_obj.name}\"")
+            tag_names = _extract_tag_names(action.get("tags") or action.get("tag_names"))
+            tag_ids: list[int] = []
+            if tag_names:
+                tags, created_tags = _get_or_create_tags(db, user, tag_names)
+                tag_ids = [tag.id for tag in tags]
+                if created_tags:
+                    extra_notes.append(f"tags {', '.join(created_tags)}")
             try:
-                priority = max(1, min(5, int(action.get("priority") or 2)))
+                priority = max(1, min(10, int(action.get("priority") or 2)))
             except (TypeError, ValueError):
                 priority = 2
 
@@ -200,9 +278,13 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
                     description=description,
                     due_datetime=due_dt,
                     priority=priority,
+                    category_id=category_id,
+                    tag_ids=tag_ids,
                 ),
             )
             created_notes.append(f"task #{task.id} \"{task.title}\"")
+            if extra_notes:
+                created_notes.extend(extra_notes)
             created_tasks[title.lower()] = task
 
             reminder_time = _parse_iso_datetime(action.get("reminder_time") or action.get("trigger_time"))
@@ -230,6 +312,7 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
             task_hint = (
                 action.get("task_title") or action.get("task_name") or action.get("for_task") or action.get("title")
             )
+            note = (action.get("note") or action.get("description") or "").strip() or None
             task_obj = None
             if isinstance(task_hint, str):
                 normalized = task_hint.lower()
@@ -241,7 +324,7 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
                     TaskCreate(
                         user_id=user.id,
                         title=task_hint.strip()[:120],
-                        description=None,
+                        description=note,
                         due_datetime=datetime.now(timezone.utc),
                         priority=2,
                     ),
@@ -250,12 +333,13 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
                 created_tasks[task_obj.title.lower()] = task_obj
             if not task_obj:
                 # Fallback: create a generic task from the user message so reminder is not orphaned.
+                title_source = note or task_hint or "Reminder"
                 task_obj = task_service.create_task(
                     db,
                     TaskCreate(
                         user_id=user.id,
-                        title=(action.get("title") or task_hint or "Reminder")[:120],
-                        description=None,
+                        title=str(title_source)[:120],
+                        description=note,
                         due_datetime=datetime.now(timezone.utc),
                         priority=2,
                     ),
@@ -271,6 +355,7 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
                     type=ReminderType.TIME,
                     trigger_time=reminder_time,
                     trigger_timezone=reminder_tz,
+                    behavior_rule=note,
                     is_active=True,
                 ),
             )
@@ -281,22 +366,40 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
             if not name:
                 continue
             description = (action.get("description") or action.get("details") or "").strip() or None
-            schedule_raw = str(action.get("schedule_type") or action.get("schedule") or "daily").lower()
-            if schedule_raw not in {s.value for s in HabitSchedule}:
-                schedule_raw = HabitSchedule.DAILY.value
+            schedule_raw = str(action.get("schedule_type") or action.get("schedule") or "daily")
+            schedule = _normalize_schedule(schedule_raw)
+            category_id = None
+            extra_notes: list[str] = []
+            category_name = action.get("category") or action.get("category_name")
+            if isinstance(category_name, str) and category_name.strip():
+                category_obj, created_cat = _get_or_create_category(db, user, category_name)
+                category_id = category_obj.id
+                if created_cat:
+                    extra_notes.append(f"category \"{category_obj.name}\"")
+            tag_names = _extract_tag_names(action.get("tags") or action.get("tag_names"))
+            tag_ids: list[int] = []
+            if tag_names:
+                tags, created_tags = _get_or_create_tags(db, user, tag_names)
+                tag_ids = [tag.id for tag in tags]
+                if created_tags:
+                    extra_notes.append(f"tags {', '.join(created_tags)}")
             habit = habit_service.create_habit(
                 db,
                 HabitCreate(
                     user_id=user.id,
                     name=name,
                     description=description,
-                    schedule_type=HabitSchedule(schedule_raw),
+                    schedule_type=schedule,
                     schedule_config=None,
                     is_active=True,
+                    category_id=category_id,
+                    tag_ids=tag_ids,
                 ),
             )
             created_habits[habit.name.lower()] = habit
             created_notes.append(f"habit #{habit.id} \"{habit.name}\"")
+            if extra_notes:
+                created_notes.extend(extra_notes)
 
     return created_notes
 
