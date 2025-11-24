@@ -30,7 +30,7 @@ pip install -r requirements.txt
 cp .env.example .env  # fill secrets/DB/timezone/LLM keys if needed
 ```
 
-Key `.env` values: `APP_NAME`, `DATABASE_URL` (default SQLite `data/app.db`), `TELEGRAM_BOT_TOKEN` (for Telegram signature checks; optional for local web runs), `SCHEDULER_TIMEZONE`. LLM keys are optional unless you enable those code paths.
+Key `.env` values: `APP_NAME`, `DATABASE_URL` (default SQLite `data/app.db`), `TELEGRAM_BOT_TOKEN` (for Telegram signature checks; optional for local web runs), `SCHEDULER_TIMEZONE`. LLM keys (`LLM_PROVIDER`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) are prefilled for ai.io and can be swapped or disabled (`LLM_PROVIDER=mock`).
 
 ## Run
 ```bash
@@ -43,6 +43,7 @@ On start:
 2. REST API lives at `http://127.0.0.1:8000/api/v1/...`.
 3. APScheduler polls every ~5 minutes for time-based reminders.
 4. Telegram mini-app UI is served at `/web` (same host).
+5. `/api/v1/assistant/message` calls the ai.io LLM to read your tasks/reminders snapshot and can create new tasks/reminders from free-form text.
 
 ## API surface (v1)
 - All endpoints expect raw `initData` from the Telegram WebApp in `X-Telegram-Init-Data`; the backend verifies it and auto-creates users by `telegram_id`.
@@ -56,6 +57,6 @@ On start:
 - **Expo skeleton (archived)**: `frontend/mobile` keeps component drafts; not wired to the current flow.
 
 ## Notes for further work
-- LLM helpers live in `backend/app/core/llm_client.py` and `context_service.py`.
+- LLM helpers live in `backend/app/core/llm_client.py` and `app/services/assistant_service.py`.
 - Alembic migrations are not set up yet.
 - React/React Native implementations can reuse the same REST API surface when/if revived.

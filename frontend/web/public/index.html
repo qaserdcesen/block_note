@@ -164,12 +164,12 @@
               <p class="muted">Напишите запрос — остальное заберёт на себя backend.</p>
             </div>
           </div>
-          <article class="card">
+          <article class="card assistant-card">
+            <div class="assistant-history" id="assistant-history"></div>
             <form id="assistant-form" class="assistant-form">
-              <label>Сообщение ассистенту<input type="text" id="assistant-message" placeholder="Например: составь план на день" required /></label>
-              <button type="submit">Отправить</button>
+              <input type="text" id="assistant-message" placeholder="Сообщение ассистенту..." required />
+              <button type="submit" aria-label="Отправить">➤</button>
             </form>
-            <div class="list" id="assistant-history"></div>
           </article>
         </section>
 

@@ -6,3 +6,4 @@ pydantic>=2.5
 pydantic-settings>=2.0
 python-dotenv>=1.0
 apscheduler>=3.10
+openai>=1.51.0

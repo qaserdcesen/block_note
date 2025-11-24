@@ -24,11 +24,17 @@ After start the API lives at `http://127.0.0.1:8000/api/v1` and the bundled web 
 - SQLAlchemy 2.x + SQLite - persistence (swap to PostgreSQL later if needed).
 - Pydantic v2 - validation & serialization.
 - APScheduler - background reminder polling.
+- OpenAI client (ai.io-compatible) - LLM-powered assistant.
 
 ## Modules
 - app/api - routers (tasks, habits, reminders, assistant, categories, tags).
-- app/services - business logic and orchestrations.
-- app/core - configuration, security (Telegram init data verification), scheduler, stub llm client.
+- app/services - business logic and orchestrations (assistant creates tasks/reminders via ai.io).
+- app/core - configuration, security (Telegram init data verification), scheduler, LLM client wrapper.
 - app/db - base classes, engine/session, init_db.
 - app/models - ORM models.
 - app/workers - background jobs (reminder worker).
+
+## AI assistant (ai.io.net)
+- Endpoint: `POST /api/v1/assistant/message` with `{"user_message": "..."}`. Uses recent chat history + DB snapshot of tasks/reminders/habits to answer and can issue actions (create_task/create_reminder).
+- Provider: ai.io (OpenAI-compatible). Defaults are prefilled in `.env.example`: `LLM_PROVIDER=ai_io`, `LLM_API_KEY`, `LLM_BASE_URL=https://api.intelligence.io.solutions/api/v1/`, `LLM_MODEL=openai/gpt-oss-120b`, `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`.
+- Replace `LLM_API_KEY` in `.env` if you want a different key. Set `LLM_PROVIDER=mock` to disable network calls and fall back to simple keyword-based behavior.
