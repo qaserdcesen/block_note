@@ -15,7 +15,7 @@ const state = {
   tags: [],
   ui: {
     taskSearch: "",
-    taskSort: "priority_desc",
+    taskSort: "date_desc",
     habitSearch: "",
     habitSort: "name_asc",
   },
@@ -173,7 +173,6 @@ function bindForms() {
   el("habit-form")?.addEventListener("submit", handleCreateHabit);
   el("reminder-form")?.addEventListener("submit", handleCreateReminder);
   el("assistant-form")?.addEventListener("submit", handleAssistant);
-  tasksDateInput?.addEventListener("change", loadTasks);
   linkCompletionInputs(el("task-completion-value"), el("task-done"));
   linkCompletionInputs(el("habit-completion-value"), el("habit-done"));
 }
@@ -468,9 +467,8 @@ async function handleCreateTask(event) {
 }
 
 async function loadTasks() {
-  const date = tasksDateInput?.value || today;
   try {
-    const tasks = await apiFetch(`/tasks?date=${date}`);
+    const tasks = await apiFetch(`/tasks`);
     state.tasks = tasks || [];
     renderTasks(state.tasks);
   } catch (error) {
@@ -494,7 +492,7 @@ function renderTasks(tasks) {
   const sorted = sortTasks(filtered, sortKey);
   tasksList.innerHTML = "";
   if (!sorted.length) {
-    const message = tasks.length ? "Ничего не найдено по текущему поиску или сортировке" : "На выбранную дату задач нет";
+    const message = tasks.length ? "Ничего не найдено по текущему поиску или сортировке" : "Задач пока нет";
     tasksList.innerHTML = `<p class="muted">${message}</p>`;
     return;
   }

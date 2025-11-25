@@ -12,23 +12,26 @@ from app.schemas.task import TaskCreate, TaskUpdate
 from app.services.tag_service import fetch_user_tags
 
 
-def list_tasks_for_date(
-    db: Session, user_id: int, day: date, category_id: int | None = None, tag_id: int | None = None
+def list_tasks(
+    db: Session, user_id: int, day: date | None = None, category_id: int | None = None, tag_id: int | None = None
 ) -> List[Task]:
-    start_dt = datetime.combine(day, time.min)
-    end_dt = datetime.combine(day, time.max)
-    stmt = (
-        select(Task)
-        .where(Task.user_id == user_id)
-        .where(Task.due_datetime.is_not(None))
-        .where(Task.due_datetime >= start_dt)
-        .where(Task.due_datetime <= end_dt)
-    )
+    stmt = select(Task).where(Task.user_id == user_id)
+
+    if day is not None:
+        start_dt = datetime.combine(day, time.min)
+        end_dt = datetime.combine(day, time.max)
+        stmt = (
+            stmt.where(Task.due_datetime.is_not(None))
+            .where(Task.due_datetime >= start_dt)
+            .where(Task.due_datetime <= end_dt)
+        )
+
     if category_id is not None:
         stmt = stmt.where(Task.category_id == category_id)
     if tag_id is not None:
         stmt = stmt.join(Task.tags).where(Tag.id == tag_id)
-    stmt = stmt.order_by(Task.due_datetime.asc()).distinct()
+
+    stmt = stmt.order_by(Task.due_datetime.desc(), Task.priority.desc(), Task.id.desc()).distinct()
     return list(db.execute(stmt).scalars().all())
 
 
