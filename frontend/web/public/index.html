@@ -178,11 +178,84 @@
             <div>
               <p class="eyebrow">Профиль</p>
               <h2>Личные данные</h2>
-              <p class="muted">Заглушка: позже здесь будут настройки аккаунта, уведомлений и интеграций.</p>
+              <p class="muted">Просматривайте базовую информацию, статистику и настраивайте планер.</p>
             </div>
           </div>
-          <article class="card notice">
-            <p><strong>Профиль в разработке.</strong> Сейчас доступна только навигация по созданию задач, привычек и напоминаний.</p>
+          <article class="card" id="profile-user-card">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Аккаунт</p>
+                <h3>Ваши данные</h3>
+                <p class="muted">Данные подтягиваются из Telegram WebApp или локального профиля.</p>
+              </div>
+            </header>
+            <div class="info-grid">
+              <div class="info-row">
+                <span class="muted">Имя</span>
+                <strong id="profile-name">Имя пользователя недоступно</strong>
+              </div>
+              <div class="info-row">
+                <span class="muted">Username</span>
+                <strong id="profile-username">Не указан</strong>
+              </div>
+              <div class="info-row">
+                <span class="muted">Идентификатор</span>
+                <strong id="profile-id">-</strong>
+              </div>
+              <div class="info-row">
+                <span class="muted">Часовой пояс</span>
+                <strong id="profile-timezone">UTC</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card" id="profile-stats-card">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Краткая статистика</p>
+                <h3>Задачи и привычки</h3>
+              </div>
+            </header>
+            <div class="stat-grid">
+              <div class="stat-card">
+                <p class="muted">Выполнено задач за 7 дней</p>
+                <div class="stat-value" id="profile-tasks-week">—</div>
+              </div>
+              <div class="stat-card">
+                <p class="muted">Выполнено привычек за 7 дней</p>
+                <div class="stat-value" id="profile-habits-week">—</div>
+              </div>
+              <div class="stat-card">
+                <p class="muted">Выполнено задач сегодня</p>
+                <div class="stat-value" id="profile-tasks-today">—</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card" id="profile-settings-card">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Настройки</p>
+                <h3>Планер и ассистент</h3>
+                <p class="muted">Выберите первый день недели и время начала дня.</p>
+              </div>
+            </header>
+            <form id="profile-settings-form" class="form-grid">
+              <label>Часовой пояс
+                <input type="text" id="settings-timezone" placeholder="Например: Europe/Moscow" />
+              </label>
+              <label>Первый день недели
+                <select id="settings-week-start">
+                  <option value="monday">Понедельник</option>
+                  <option value="sunday">Воскресенье</option>
+                </select>
+              </label>
+              <label>Начало дня (часы)
+                <input type="number" id="settings-day-start" min="0" max="23" step="1" />
+              </label>
+              <button type="submit">Сохранить настройки</button>
+            </form>
+            <p class="muted">Настройки сохраняются для текущего пользователя.</p>
           </article>
         </section>
       </main>

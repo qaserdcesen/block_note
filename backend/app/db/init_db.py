@@ -41,6 +41,13 @@ def init_db() -> None:
     _ensure_column("habits", "category_id", "category_id INTEGER REFERENCES categories(id)")
     _ensure_column("users", "telegram_id", "telegram_id BIGINT UNIQUE")
     _ensure_column("users", "telegram_username", "telegram_username VARCHAR(64)")
+    _ensure_column("users", "first_day_of_week", "first_day_of_week VARCHAR(16) NOT NULL DEFAULT 'monday'")
+    _ensure_column("users", "day_start_hour", "day_start_hour INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(
+        "users",
+        "assistant_suggestions_enabled",
+        "assistant_suggestions_enabled BOOLEAN NOT NULL DEFAULT 1",
+    )
     _drop_column("users", "email")
     _drop_column("users", "hashed_password")
     _normalize_enum_values("tasks", "completion_mode")

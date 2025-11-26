@@ -184,6 +184,28 @@ body {
   pointer-events: none;
 }
 
+.info-grid,
+.stat-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.info-row,
+.stat-card {
+  padding: 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  display: grid;
+  gap: 6px;
+}
+
+.stat-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
 .form-card header h3 {
   margin: 4px 0 10px;
 }

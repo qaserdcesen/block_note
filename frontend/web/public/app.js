@@ -1,6 +1,8 @@
 ﻿const apiBase = "/api/v1";
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const tg = window.Telegram?.WebApp;
+const initialTimezone =
+  localStorage.getItem("cthm_timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 const ADD_CATEGORY_VALUE = "__add_category__";
 const ADD_TAG_VALUE = "__add_tag__";
@@ -19,8 +21,17 @@ const state = {
     habitSearch: "",
     habitSort: "name_asc",
   },
-  userTimezone: localStorage.getItem("cthm_timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  userTimezone: initialTimezone,
   telegramUser: tg?.initDataUnsafe?.user || null,
+  profile: {
+    user: null,
+    stats: null,
+    settings: {
+      timezone: initialTimezone,
+      first_day_of_week: "monday",
+      day_start_hour: 0,
+    },
+  },
 };
 
 const el = (id) => document.getElementById(id);
@@ -50,6 +61,17 @@ const navAssistantBtn = el("nav-assistant");
 const creationMenu = el("creation-menu");
 const creationOptions = Array.from(document.querySelectorAll(".creation-option"));
 const creationPages = ["tasks-page", "habits-page", "reminders-page"];
+const profileNameEl = el("profile-name");
+const profileUsernameEl = el("profile-username");
+const profileIdEl = el("profile-id");
+const profileTimezoneEl = el("profile-timezone");
+const profileTasksWeekEl = el("profile-tasks-week");
+const profileHabitsWeekEl = el("profile-habits-week");
+const profileTasksTodayEl = el("profile-tasks-today");
+const profileSettingsForm = el("profile-settings-form");
+const settingsTimezoneInput = el("settings-timezone");
+const settingsWeekStartSelect = el("settings-week-start");
+const settingsDayStartInput = el("settings-day-start");
 
 const pages = {
   "tasks-page": el("tasks-page"),
@@ -57,6 +79,11 @@ const pages = {
   "reminders-page": el("reminders-page"),
   "assistant-page": el("assistant-page"),
   "profile-page": el("profile-page"),
+};
+
+const formatUsername = (username) => {
+  if (!username) return "";
+  return username.startsWith("@") ? username : `@${username}`;
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -116,6 +143,7 @@ function switchPage(targetId) {
   if (creationPages.includes(targetId)) navCreateBtn?.classList.add("active");
   else if (targetId === "assistant-page") navAssistantBtn?.classList.add("active");
   else if (targetId === "profile-page") navProfileBtn?.classList.add("active");
+  if (targetId === "profile-page") loadProfile();
   closeCreationMenu();
   updateUserMeta();
 }
@@ -139,8 +167,12 @@ function toggleCreationMenu() {
 }
 
 function updateUserMeta() {
-  const rawTgLabel = state.telegramUser?.username || state.telegramUser?.first_name || null;
-  const tgLabel = rawTgLabel ? (rawTgLabel.startsWith("@") ? rawTgLabel : `@${rawTgLabel}`) : null;
+  const username = state.profile.user?.telegram_username || state.telegramUser?.username || null;
+  const profileName =
+    [state.telegramUser?.first_name, state.telegramUser?.last_name].filter(Boolean).join(" ") ||
+    state.profile.user?.telegram_username ||
+    "";
+  const tgLabel = formatUsername(username) || profileName;
   const prefix = tgLabel ? `Вы вошли как ${tgLabel}` : "Гость";
   if (currentUserEl) currentUserEl.textContent = prefix;
   if (timezoneIndicator) timezoneIndicator.textContent = state.userTimezone || "UTC";
@@ -148,6 +180,7 @@ function updateUserMeta() {
 
 function updatePanels() {
   updateUserMeta();
+  renderProfile();
 }
 
 function bindNav() {
@@ -173,6 +206,7 @@ function bindForms() {
   el("habit-form")?.addEventListener("submit", handleCreateHabit);
   el("reminder-form")?.addEventListener("submit", handleCreateReminder);
   el("assistant-form")?.addEventListener("submit", handleAssistant);
+  profileSettingsForm?.addEventListener("submit", handleSaveSettings);
   linkCompletionInputs(el("task-completion-value"), el("task-done"));
   linkCompletionInputs(el("habit-completion-value"), el("habit-done"));
 }
@@ -205,6 +239,82 @@ function bindFilters() {
       state.ui.habitSort = habitSortSelect.value;
       renderHabits(state.habits);
     });
+  }
+}
+
+function renderProfile() {
+  renderProfileUser();
+  renderProfileStats();
+  fillSettingsForm();
+}
+
+function renderProfileUser() {
+  const username = state.profile.user?.telegram_username || state.telegramUser?.username || "";
+  const fullName = [state.telegramUser?.first_name, state.telegramUser?.last_name].filter(Boolean).join(" ").trim();
+  const idValue = state.profile.user?.telegram_id ?? state.telegramUser?.id ?? state.profile.user?.id;
+  const displayName = fullName || formatUsername(username) || state.profile.user?.telegram_username || "";
+  if (profileNameEl) profileNameEl.textContent = displayName || "Имя пользователя недоступно";
+  if (profileUsernameEl) profileUsernameEl.textContent = formatUsername(username) || "Не указан";
+  if (profileIdEl) profileIdEl.textContent = idValue ? String(idValue) : "-";
+  if (profileTimezoneEl) profileTimezoneEl.textContent = state.profile.settings?.timezone || state.userTimezone || "UTC";
+}
+
+function renderProfileStats() {
+  const stats = state.profile.stats;
+  const valueOrDash = (value) => (typeof value === "number" ? value : "—");
+  if (profileTasksWeekEl) profileTasksWeekEl.textContent = valueOrDash(stats?.tasks_completed_last_7_days);
+  if (profileHabitsWeekEl) profileHabitsWeekEl.textContent = valueOrDash(stats?.habits_completed_last_7_days);
+  if (profileTasksTodayEl) profileTasksTodayEl.textContent = valueOrDash(stats?.tasks_completed_today);
+}
+
+function fillSettingsForm() {
+  const settings = state.profile.settings || {};
+  if (settingsTimezoneInput) settingsTimezoneInput.value = settings.timezone || state.userTimezone || "UTC";
+  if (settingsWeekStartSelect) settingsWeekStartSelect.value = settings.first_day_of_week || "monday";
+  if (settingsDayStartInput)
+    settingsDayStartInput.value =
+      typeof settings.day_start_hour === "number" ? settings.day_start_hour : state.profile.settings.day_start_hour;
+}
+
+async function handleSaveSettings(event) {
+  event.preventDefault();
+  const payload = {
+    timezone: (settingsTimezoneInput?.value || state.userTimezone || "UTC").trim(),
+    first_day_of_week: settingsWeekStartSelect?.value || "monday",
+    day_start_hour: clamp(Number(settingsDayStartInput?.value) || 0, 0, 23),
+  };
+  payload.first_day_of_week = (payload.first_day_of_week || "monday").toLowerCase();
+  if (!payload.timezone) payload.timezone = "UTC";
+  try {
+    const saved = await apiFetch("/users/me/settings", { method: "PUT", body: JSON.stringify(payload) });
+    state.profile.settings = { ...state.profile.settings, ...(saved || payload) };
+    state.userTimezone = state.profile.settings.timezone || state.userTimezone;
+    localStorage.setItem("cthm_timezone", state.userTimezone);
+    setStatus("Настройки профиля сохранены", "success");
+    renderProfile();
+    updateUserMeta();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function loadProfile() {
+  try {
+    const [user, stats, settings] = await Promise.all([
+      apiFetch("/users/me"),
+      apiFetch("/users/me/stats"),
+      apiFetch("/users/me/settings"),
+    ]);
+    state.profile.user = user || null;
+    state.profile.stats = stats || null;
+    if (settings) state.profile.settings = { ...state.profile.settings, ...settings };
+    state.userTimezone = state.profile.settings.timezone || state.userTimezone;
+    localStorage.setItem("cthm_timezone", state.userTimezone);
+    renderProfile();
+    updateUserMeta();
+  } catch (error) {
+    renderProfile();
+    setStatus(error.message, "error");
   }
 }
 
@@ -1175,5 +1285,5 @@ async function apiFetch(path, options = {}) {
 
 async function refreshAll() {
   await loadTaxonomy();
-  await Promise.all([loadTasks(), loadHabits(), loadReminders()]);
+  await Promise.all([loadTasks(), loadHabits(), loadReminders(), loadProfile()]);
 }
