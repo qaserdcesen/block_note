@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
@@ -14,11 +15,37 @@ def list_categories(db: Session, user_id: int) -> list[Category]:
 def create_category(db: Session, data: CategoryCreate) -> Category:
     if data.user_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required")
-    category = Category(**data.model_dump())
-    db.add(category)
-    db.commit()
-    db.refresh(category)
-    return category
+    normalized = data.name.strip()
+    # Defensive deduplication by trimmed lower name.
+    existing = (
+        db.execute(
+            select(Category)
+            .where(Category.user_id == data.user_id)
+            .where(func.lower(func.trim(Category.name)) == normalized.lower())
+        )
+        .scalar_one_or_none()
+    )
+    if existing:
+        return existing
+    try:
+        category = Category(user_id=data.user_id, name=normalized)
+        db.add(category)
+        db.commit()
+        db.refresh(category)
+        return category
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            db.execute(
+                select(Category)
+                .where(Category.user_id == data.user_id)
+                .where(func.lower(func.trim(Category.name)) == normalized.lower())
+            )
+            .scalar_one_or_none()
+        )
+        if existing:
+            return existing
+        raise
 
 
 def update_category(db: Session, category_id: int, user_id: int, data: CategoryUpdate) -> Category:

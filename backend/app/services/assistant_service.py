@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -62,17 +63,34 @@ def _load_recent_messages(db: Session, user_id: int, limit: int = 10) -> List[Me
 
 
 def _get_or_create_category(db: Session, user: User, name: str) -> tuple[Category, bool]:
-    normalized = name.strip()
+    normalized = " ".join(name.strip().split())
     if not normalized:
         raise ValueError("Empty category name")
     existing = (
-        db.execute(select(Category).where(Category.user_id == user.id).where(func.lower(Category.name) == normalized.lower()))
+        db.execute(
+            select(Category)
+            .where(Category.user_id == user.id)
+            .where(func.lower(func.trim(Category.name)) == normalized.lower())
+        )
         .scalar_one_or_none()
     )
     if existing:
         return existing, False
-    category = category_service.create_category(db, CategoryCreate(user_id=user.id, name=normalized))
-    return category, True
+    try:
+        category = category_service.create_category(db, CategoryCreate(user_id=user.id, name=normalized))
+        return category, True
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            db.execute(
+                select(Category)
+                .where(Category.user_id == user.id)
+                .where(func.lower(func.trim(Category.name)) == normalized.lower())
+            ).scalar_one_or_none()
+        )
+        if existing:
+            return existing, False
+        raise
 
 
 def _get_or_create_tags(db: Session, user: User, raw_tags: list[str]) -> tuple[list[Tag], list[str]]:
@@ -256,6 +274,7 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
     created_notes: list[str] = []
     created_tasks: dict[str, Task] = {}
     created_habits: dict[str, Habit] = {}
+    has_explicit_reminder = any(str(a.get("type") or "").lower() == "create_reminder" for a in actions)
 
     for action in actions:
         action_type = str(action.get("type") or "").lower()
@@ -269,6 +288,27 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
             if due_dt is None:
                 # Ensure tasks show up in today's list by default.
                 due_dt = datetime.now(timezone.utc)
+            reminder_only_time = _parse_iso_datetime(action.get("reminder_time") or action.get("trigger_time"))
+            if reminder_only_time and not action.get("due_datetime") and not action.get("deadline"):
+                reminder_tz = action.get("timezone") or action.get("trigger_timezone") or user.timezone or "UTC"
+                note = description or title
+                reminder = reminder_service.create_reminder(
+                    db,
+                    ReminderCreate(
+                        user_id=user.id,
+                        task_id=None,
+                        type=ReminderType.TIME,
+                        trigger_time=reminder_only_time,
+                        trigger_timezone=reminder_tz,
+                        behavior_rule=note,
+                        is_active=True,
+                    ),
+                )
+                created_notes.append(f"reminder #{reminder.id} at {reminder_only_time.isoformat()}")
+                continue
+            if has_explicit_reminder:
+                # Если в плане есть отдельный create_reminder — не создаём задачу, чтобы избежать дублирования.
+                continue
             category_id = None
             extra_notes: list[str] = []
             category_name = action.get("category") or action.get("category_name")
@@ -306,22 +346,6 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
                 created_notes.extend(extra_notes)
             created_tasks[title.lower()] = task
 
-            reminder_time = _parse_iso_datetime(action.get("reminder_time") or action.get("trigger_time"))
-            if reminder_time:
-                reminder_tz = action.get("timezone") or action.get("trigger_timezone") or user.timezone or "UTC"
-                reminder = reminder_service.create_reminder(
-                    db,
-                    ReminderCreate(
-                        user_id=user.id,
-                        task_id=task.id,
-                        type=ReminderType.TIME,
-                        trigger_time=reminder_time,
-                        trigger_timezone=reminder_tz,
-                        is_active=True,
-                    ),
-                )
-                created_notes.append(f"reminder #{reminder.id} at {reminder_time.isoformat()}")
-
         elif action_type == "create_reminder":
             reminder_time = _parse_iso_datetime(action.get("trigger_time") or action.get("reminder_time"))
             if not reminder_time:
@@ -336,35 +360,6 @@ def _execute_actions(db: Session, user: User, actions: list[dict]) -> list[str]:
             if isinstance(task_hint, str):
                 normalized = task_hint.lower()
                 task_obj = created_tasks.get(normalized) or _find_task_by_hint(db, user.id, normalized)
-            if not task_obj and isinstance(task_hint, str) and task_hint.strip():
-                # Create a lightweight task so reminder has a title in the UI.
-                task_obj = task_service.create_task(
-                    db,
-                    TaskCreate(
-                        user_id=user.id,
-                        title=task_hint.strip()[:120],
-                        description=note,
-                        due_datetime=datetime.now(timezone.utc),
-                        priority=2,
-                    ),
-                )
-                created_notes.append(f"task #{task_obj.id} \"{task_obj.title}\"")
-                created_tasks[task_obj.title.lower()] = task_obj
-            if not task_obj:
-                # Fallback: create a generic task from the user message so reminder is not orphaned.
-                title_source = note or task_hint or "Reminder"
-                task_obj = task_service.create_task(
-                    db,
-                    TaskCreate(
-                        user_id=user.id,
-                        title=str(title_source)[:120],
-                        description=note,
-                        due_datetime=datetime.now(timezone.utc),
-                        priority=2,
-                    ),
-                )
-                created_notes.append(f"task #{task_obj.id} \"{task_obj.title}\"")
-                created_tasks[task_obj.title.lower()] = task_obj
 
             reminder = reminder_service.create_reminder(
                 db,

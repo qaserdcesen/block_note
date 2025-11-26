@@ -68,6 +68,6 @@ class UserStats(BaseModel):
     habit_current_streak: int = 0
     habit_best_streak: int = 0
     habit_skips_last_30_days: int = 0
-    tasks_by_priority: list[dict[str, int]] = []
-    tasks_by_category: list[dict[str, int]] = []
+    tasks_by_priority: list[dict[str, int | str]] = []
+    tasks_by_category: list[dict[str, int | str]] = []
 
