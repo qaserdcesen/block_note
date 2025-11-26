@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.category import Category
 from app.models.habit import Habit, HabitCompletionMode, HabitLog, HabitLogStatus
+from app.models.reminder import Reminder
 from app.models.tag import Tag
 from app.schemas.habit import HabitCreate, HabitLogCreate, HabitUpdate
 from app.services.tag_service import fetch_user_tags
@@ -92,3 +93,13 @@ def add_habit_log(db: Session, habit_id: int, user_id: int, payload: HabitLogCre
     db.commit()
     db.refresh(log)
     return log
+
+
+def delete_habit(db: Session, habit_id: int, user_id: int) -> None:
+    habit = db.get(Habit, habit_id)
+    if not habit or habit.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Habit not found")
+    db.query(HabitLog).where(HabitLog.habit_id == habit_id).delete()
+    db.query(Reminder).where(Reminder.habit_id == habit_id).delete()
+    db.delete(habit)
+    db.commit()

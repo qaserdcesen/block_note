@@ -878,7 +878,12 @@ function renderHabits(habits) {
     skipBtn.textContent = "Пропустить сегодня";
     skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
 
-    controls.append(editBtn, completionControls, skipBtn);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "Удалить";
+    deleteBtn.onclick = () => deleteHabit(habit.id);
+
+    controls.append(editBtn, completionControls, skipBtn, deleteBtn);
 
     const collapseBtn = createCollapseToggle(card, body);
     header.append(titleWrap, scheduleBadge, collapseBtn);
@@ -1051,6 +1056,16 @@ async function logHabitStatus(habitId, status) {
   try {
     await apiFetch(`/habits/${habitId}/logs`, { method: "POST", body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), status }) });
     setStatus("Статус привычки отмечен", "success");
+    await loadHabits();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function deleteHabit(id) {
+  try {
+    await apiFetch(`/habits/${id}`, { method: "DELETE" });
+    setStatus("Привычка удалена", "success");
     await loadHabits();
   } catch (error) {
     setStatus(error.message, "error");

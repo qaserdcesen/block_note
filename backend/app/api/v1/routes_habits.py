@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -36,6 +36,12 @@ def update_habit(
     return habit_service.update_habit(db, habit_id=habit_id, user_id=current_user.id, data=data)
 
 
+@router.delete("/{habit_id}", status_code=204)
+def delete_habit(habit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    habit_service.delete_habit(db, habit_id=habit_id, user_id=current_user.id)
+    return Response(status_code=204)
+
+
 @router.get("/{habit_id}/logs", response_model=list[HabitLogRead])
 def get_logs(habit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return habit_service.get_habit_logs(db, habit_id=habit_id, user_id=current_user.id)
@@ -49,4 +55,3 @@ def add_log(
     current_user: User = Depends(get_current_user),
 ):
     return habit_service.add_habit_log(db, habit_id=habit_id, user_id=current_user.id, payload=payload)
-
