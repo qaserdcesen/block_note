@@ -179,9 +179,27 @@ def _normalize_schedule(raw: str) -> HabitSchedule:
 def _build_system_prompt(user: Optional[User], snapshot: str) -> str:
     tz = (user.timezone if user and user.timezone else settings.scheduler_timezone) or "UTC"
     language = "Russian"
+    tone = getattr(user, "assistant_tone", "friendly") or "friendly"
+    detail = getattr(user, "assistant_detail", "concise") or "concise"
+    suggest_habits = getattr(user, "assistant_tips_suggest_habits", True)
+    remind_overdue = getattr(user, "assistant_tips_overdue_tasks", True)
+    guidance = []
+    if tone == "formal":
+        guidance.append("Пиши вежливо и формально.")
+    else:
+        guidance.append("Пиши дружелюбно.")
+    if detail == "detailed":
+        guidance.append("Делай ответы подробнее, но всё ещё компактно.")
+    else:
+        guidance.append("Делай ответы максимально кратко.")
+    if not suggest_habits:
+        guidance.append("Не предлагай новые привычки без запроса.")
+    if not remind_overdue:
+        guidance.append("Не напоминай о просроченных задачах, если прямо не спрашивают.")
+
     return (
         "Ты ИИ-ассистент планировщика с доступом к БД (задачи/привычки/напоминания). "
-        f"Отвечай кратко на {language}, строго JSON с ключами reply и actions. "
+        f"Отвечай на {language}, строго JSON с ключами reply и actions. "
         "actions — массив. Допустимые type: create_task, create_reminder, create_habit. "
         "create_task поля: title (обязательно), description (опционально), "
         "due_datetime (ISO 8601 с таймзоной), priority (1-10), category (опционально, создай если нет), "
@@ -192,6 +210,7 @@ def _build_system_prompt(user: Optional[User], snapshot: str) -> str:
         "schedule_type (daily/weekly/custom), category (опционально, создай если нет), "
         "tags (строка/массив, создай если нет). "
         "Если действий не нужно, верни actions: []. Не выдумывай данные — опирайся на снимок БД и запрос пользователя. "
+        f"{' '.join(guidance)} "
         f"Часовой пояс пользователя: {tz}. "
         "Снимок данных:\n"
         f"{snapshot}"

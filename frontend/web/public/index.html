@@ -229,6 +229,36 @@
                 <p class="muted">Выполнено задач сегодня</p>
                 <div class="stat-value" id="profile-tasks-today">—</div>
               </div>
+              <div class="stat-card">
+                <p class="muted">Выполнено задач за 30 дней</p>
+                <div class="stat-value" id="profile-tasks-month">—</div>
+              </div>
+              <div class="stat-card">
+                <p class="muted">Выполнено привычек за 30 дней</p>
+                <div class="stat-value" id="profile-habits-month">—</div>
+              </div>
+              <div class="stat-card">
+                <p class="muted">Текущий стрик по привычкам</p>
+                <div class="stat-value" id="profile-habits-streak-current">—</div>
+              </div>
+              <div class="stat-card">
+                <p class="muted">Лучший стрик</p>
+                <div class="stat-value" id="profile-habits-streak-best">—</div>
+              </div>
+              <div class="stat-card">
+                <p class="muted">Пропусков за 30 дней</p>
+                <div class="stat-value" id="profile-habits-skips">—</div>
+              </div>
+            </div>
+            <div class="stat-lists">
+              <div>
+                <p class="muted">Распределение по приоритетам</p>
+                <ul class="pill-list" id="profile-priority-breakdown"></ul>
+              </div>
+              <div>
+                <p class="muted">Задачи по категориям</p>
+                <ul class="pill-list" id="profile-category-breakdown"></ul>
+              </div>
             </div>
           </article>
 
@@ -236,7 +266,7 @@
             <header class="section-head">
               <div>
                 <p class="eyebrow">Настройки</p>
-                <h3>Планер и ассистент</h3>
+                <h3>Планер</h3>
                 <p class="muted">Выберите первый день недели и время начала дня.</p>
               </div>
             </header>
@@ -256,6 +286,115 @@
               <button type="submit">Сохранить настройки</button>
             </form>
             <p class="muted">Настройки сохраняются для текущего пользователя.</p>
+          </article>
+
+          <article class="card" id="profile-personalization-card">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Персонализация</p>
+                <h3>Вид и удобство</h3>
+                <p class="muted">Подберите внешний вид мини-приложения под себя.</p>
+              </div>
+            </header>
+            <form id="profile-personalization-form" class="form-grid">
+              <label>Тема
+                <select id="settings-theme-mode">
+                  <option value="system">Системная</option>
+                  <option value="light">Светлая</option>
+                  <option value="dark">Тёмная</option>
+                </select>
+              </label>
+              <label>Плотность интерфейса
+                <select id="settings-ui-density">
+                  <option value="standard">Стандартная</option>
+                  <option value="compact">Компактная</option>
+                  <option value="cozy">Крупная</option>
+                </select>
+              </label>
+              <label>Размер шрифта
+                <select id="settings-font-scale">
+                  <option value="normal">Стандартный</option>
+                  <option value="large">Крупнее</option>
+                  <option value="small">Компактнее</option>
+                </select>
+              </label>
+              <button type="submit">Сохранить персонализацию</button>
+            </form>
+          </article>
+
+          <article class="card" id="profile-assistant-card">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Ассистент</p>
+                <h3>Настройка общения</h3>
+                <p class="muted">Выберите стиль ответов и подсказок.</p>
+              </div>
+            </header>
+            <form id="profile-assistant-form" class="form-grid">
+              <label>Тональность
+                <select id="settings-assistant-tone">
+                  <option value="friendly">Дружелюбный</option>
+                  <option value="formal">Формальный</option>
+                </select>
+              </label>
+              <label>Детальность
+                <select id="settings-assistant-detail">
+                  <option value="concise">Кратко</option>
+                  <option value="detailed">Подробнее</option>
+                </select>
+              </label>
+              <label class="checkbox-inline">
+                <input type="checkbox" id="settings-assistant-suggest-habits" />
+                Предлагать новые привычки
+              </label>
+              <label class="checkbox-inline">
+                <input type="checkbox" id="settings-assistant-overdue" />
+                Напоминать о просроченных задачах
+              </label>
+              <button type="submit">Сохранить настройки ассистента</button>
+            </form>
+          </article>
+
+          <article class="card" id="profile-goals-card">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Цели</p>
+                <h3>Цели и фокусы</h3>
+                <p class="muted">Кратко фиксируйте цели и связывайте их с категориями.</p>
+              </div>
+            </header>
+            <form id="goal-form" class="form-grid">
+              <label>Название цели
+                <input type="text" id="goal-title" required placeholder="Например: Подготовить релиз" />
+              </label>
+              <label>Описание
+                <input type="text" id="goal-description" placeholder="Что именно нужно достичь" />
+              </label>
+              <label>Целевая дата
+                <input type="date" id="goal-target-date" />
+              </label>
+              <label>Категория
+                <select id="goal-category"></select>
+              </label>
+              <button type="submit">Добавить цель</button>
+            </form>
+            <div class="list" id="goal-list"></div>
+          </article>
+
+          <article class="card" id="profile-data-card">
+            <header class="section-head">
+              <div>
+                <p class="eyebrow">Управление данными</p>
+                <h3>Экспорт и очистка</h3>
+                <p class="muted">Скачайте данные или удалите лишнее.</p>
+              </div>
+            </header>
+            <div class="actions stack">
+              <button type="button" id="btn-export-data">Экспортировать данные (JSON)</button>
+              <button type="button" class="ghost-btn" id="btn-clean-completed">Удалить все выполненные задачи</button>
+              <button type="button" class="ghost-btn" id="btn-clean-habit-logs">Удалить журналы привычек</button>
+            </div>
+            <p class="muted">Очистка требует подтверждения. Экспорт включает задачи, напоминания и журналы привычек.</p>
           </article>
         </section>
       </main>

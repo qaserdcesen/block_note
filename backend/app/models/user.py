@@ -17,6 +17,13 @@ class User(Base):
     language: Mapped[str] = mapped_column(String(8), default="en")
     first_day_of_week: Mapped[str] = mapped_column(String(16), default="monday", nullable=False)
     day_start_hour: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    theme_mode: Mapped[str] = mapped_column(String(16), default="system", nullable=False)
+    ui_density: Mapped[str] = mapped_column(String(16), default="standard", nullable=False)
+    font_scale: Mapped[str] = mapped_column(String(16), default="normal", nullable=False)
+    assistant_tone: Mapped[str] = mapped_column(String(16), default="friendly", nullable=False)
+    assistant_detail: Mapped[str] = mapped_column(String(16), default="concise", nullable=False)
+    assistant_tips_suggest_habits: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    assistant_tips_overdue_tasks: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     assistant_suggestions_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

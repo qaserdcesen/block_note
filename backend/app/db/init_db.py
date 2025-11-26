@@ -43,6 +43,21 @@ def init_db() -> None:
     _ensure_column("users", "telegram_username", "telegram_username VARCHAR(64)")
     _ensure_column("users", "first_day_of_week", "first_day_of_week VARCHAR(16) NOT NULL DEFAULT 'monday'")
     _ensure_column("users", "day_start_hour", "day_start_hour INTEGER NOT NULL DEFAULT 0")
+    _ensure_column("users", "theme_mode", "theme_mode VARCHAR(16) NOT NULL DEFAULT 'system'")
+    _ensure_column("users", "ui_density", "ui_density VARCHAR(16) NOT NULL DEFAULT 'standard'")
+    _ensure_column("users", "font_scale", "font_scale VARCHAR(16) NOT NULL DEFAULT 'normal'")
+    _ensure_column("users", "assistant_tone", "assistant_tone VARCHAR(16) NOT NULL DEFAULT 'friendly'")
+    _ensure_column("users", "assistant_detail", "assistant_detail VARCHAR(16) NOT NULL DEFAULT 'concise'")
+    _ensure_column(
+        "users",
+        "assistant_tips_suggest_habits",
+        "assistant_tips_suggest_habits BOOLEAN NOT NULL DEFAULT 1",
+    )
+    _ensure_column(
+        "users",
+        "assistant_tips_overdue_tasks",
+        "assistant_tips_overdue_tasks BOOLEAN NOT NULL DEFAULT 1",
+    )
     _ensure_column(
         "users",
         "assistant_suggestions_enabled",

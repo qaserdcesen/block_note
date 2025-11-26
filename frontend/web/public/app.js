@@ -30,7 +30,15 @@ const state = {
       timezone: initialTimezone,
       first_day_of_week: "monday",
       day_start_hour: 0,
+      theme_mode: "system",
+      ui_density: "standard",
+      font_scale: "normal",
+      assistant_tone: "friendly",
+      assistant_detail: "concise",
+      assistant_tips_suggest_habits: true,
+      assistant_tips_overdue_tasks: true,
     },
+    goals: [],
   },
 };
 
@@ -72,6 +80,31 @@ const profileSettingsForm = el("profile-settings-form");
 const settingsTimezoneInput = el("settings-timezone");
 const settingsWeekStartSelect = el("settings-week-start");
 const settingsDayStartInput = el("settings-day-start");
+const settingsThemeModeSelect = el("settings-theme-mode");
+const settingsUiDensitySelect = el("settings-ui-density");
+const settingsFontScaleSelect = el("settings-font-scale");
+const settingsAssistantToneSelect = el("settings-assistant-tone");
+const settingsAssistantDetailSelect = el("settings-assistant-detail");
+const settingsAssistantSuggestHabits = el("settings-assistant-suggest-habits");
+const settingsAssistantOverdue = el("settings-assistant-overdue");
+const btnExportData = el("btn-export-data");
+const btnCleanCompleted = el("btn-clean-completed");
+const btnCleanHabitLogs = el("btn-clean-habit-logs");
+const goalForm = el("goal-form");
+const goalTitleInput = el("goal-title");
+const goalDescriptionInput = el("goal-description");
+const goalTargetDateInput = el("goal-target-date");
+const goalCategorySelect = el("goal-category");
+const goalList = el("goal-list");
+const profileTasksMonthEl = el("profile-tasks-month");
+const profileHabitsMonthEl = el("profile-habits-month");
+const profileHabitsStreakCurrentEl = el("profile-habits-streak-current");
+const profileHabitsStreakBestEl = el("profile-habits-streak-best");
+const profileHabitsSkipsEl = el("profile-habits-skips");
+const profilePriorityList = el("profile-priority-breakdown");
+const profileCategoryList = el("profile-category-breakdown");
+const personalizationForm = el("profile-personalization-form");
+const assistantForm = el("profile-assistant-form");
 
 const pages = {
   "tasks-page": el("tasks-page"),
@@ -143,7 +176,10 @@ function switchPage(targetId) {
   if (creationPages.includes(targetId)) navCreateBtn?.classList.add("active");
   else if (targetId === "assistant-page") navAssistantBtn?.classList.add("active");
   else if (targetId === "profile-page") navProfileBtn?.classList.add("active");
-  if (targetId === "profile-page") loadProfile();
+  if (targetId === "profile-page") {
+    loadProfile();
+    loadGoals();
+  }
   closeCreationMenu();
   updateUserMeta();
 }
@@ -207,6 +243,12 @@ function bindForms() {
   el("reminder-form")?.addEventListener("submit", handleCreateReminder);
   el("assistant-form")?.addEventListener("submit", handleAssistant);
   profileSettingsForm?.addEventListener("submit", handleSaveSettings);
+  personalizationForm?.addEventListener("submit", handleSavePersonalization);
+  assistantForm?.addEventListener("submit", handleSaveAssistantSettings);
+  goalForm?.addEventListener("submit", handleCreateGoal);
+  btnExportData?.addEventListener("click", handleExportData);
+  btnCleanCompleted?.addEventListener("click", () => handleCleanup("tasks"));
+  btnCleanHabitLogs?.addEventListener("click", () => handleCleanup("habit_logs"));
   linkCompletionInputs(el("task-completion-value"), el("task-done"));
   linkCompletionInputs(el("habit-completion-value"), el("habit-done"));
 }
@@ -246,6 +288,9 @@ function renderProfile() {
   renderProfileUser();
   renderProfileStats();
   fillSettingsForm();
+  fillPersonalizationForm();
+  fillAssistantForm();
+  applyUserPreferences(state.profile.settings);
 }
 
 function renderProfileUser() {
@@ -265,6 +310,13 @@ function renderProfileStats() {
   if (profileTasksWeekEl) profileTasksWeekEl.textContent = valueOrDash(stats?.tasks_completed_last_7_days);
   if (profileHabitsWeekEl) profileHabitsWeekEl.textContent = valueOrDash(stats?.habits_completed_last_7_days);
   if (profileTasksTodayEl) profileTasksTodayEl.textContent = valueOrDash(stats?.tasks_completed_today);
+  if (profileTasksMonthEl) profileTasksMonthEl.textContent = valueOrDash(stats?.tasks_completed_last_30_days);
+  if (profileHabitsMonthEl) profileHabitsMonthEl.textContent = valueOrDash(stats?.habits_completed_last_30_days);
+  if (profileHabitsStreakCurrentEl) profileHabitsStreakCurrentEl.textContent = valueOrDash(stats?.habit_current_streak);
+  if (profileHabitsStreakBestEl) profileHabitsStreakBestEl.textContent = valueOrDash(stats?.habit_best_streak);
+  if (profileHabitsSkipsEl) profileHabitsSkipsEl.textContent = valueOrDash(stats?.habit_skips_last_30_days);
+  renderBreakdown(profilePriorityList, stats?.tasks_by_priority);
+  renderBreakdown(profileCategoryList, stats?.tasks_by_category);
 }
 
 function fillSettingsForm() {
@@ -274,6 +326,46 @@ function fillSettingsForm() {
   if (settingsDayStartInput)
     settingsDayStartInput.value =
       typeof settings.day_start_hour === "number" ? settings.day_start_hour : state.profile.settings.day_start_hour;
+}
+
+function fillPersonalizationForm() {
+  const settings = state.profile.settings || {};
+  if (settingsThemeModeSelect) settingsThemeModeSelect.value = settings.theme_mode || "system";
+  if (settingsUiDensitySelect) settingsUiDensitySelect.value = settings.ui_density || "standard";
+  if (settingsFontScaleSelect) settingsFontScaleSelect.value = settings.font_scale || "normal";
+}
+
+function fillAssistantForm() {
+  const settings = state.profile.settings || {};
+  if (settingsAssistantToneSelect) settingsAssistantToneSelect.value = settings.assistant_tone || "friendly";
+  if (settingsAssistantDetailSelect) settingsAssistantDetailSelect.value = settings.assistant_detail || "concise";
+  if (settingsAssistantSuggestHabits)
+    settingsAssistantSuggestHabits.checked = settings.assistant_tips_suggest_habits ?? true;
+  if (settingsAssistantOverdue)
+    settingsAssistantOverdue.checked = settings.assistant_tips_overdue_tasks ?? true;
+}
+
+function renderBreakdown(target, items) {
+  if (!target) return;
+  target.innerHTML = "";
+  if (!items || !items.length) {
+    target.innerHTML = '<li class="muted">Данных пока нет</li>';
+    return;
+  }
+  items.forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = `${item.label}: ${item.count}`;
+    target.appendChild(li);
+  });
+}
+
+function applyUserPreferences(settings) {
+  const theme = settings?.theme_mode || "system";
+  document.body.classList.remove("theme-light", "theme-dark");
+  if (theme === "light") document.body.classList.add("theme-light");
+  if (theme === "dark") document.body.classList.add("theme-dark");
+  document.body.dataset.density = settings?.ui_density || "standard";
+  document.body.dataset.fontScale = settings?.font_scale || "normal";
 }
 
 async function handleSaveSettings(event) {
@@ -298,6 +390,40 @@ async function handleSaveSettings(event) {
   }
 }
 
+async function handleSavePersonalization(event) {
+  event.preventDefault();
+  const payload = {
+    theme_mode: settingsThemeModeSelect?.value || "system",
+    ui_density: settingsUiDensitySelect?.value || "standard",
+    font_scale: settingsFontScaleSelect?.value || "normal",
+  };
+  try {
+    const saved = await apiFetch("/users/me/settings", { method: "PUT", body: JSON.stringify(payload) });
+    state.profile.settings = { ...state.profile.settings, ...(saved || payload) };
+    applyUserPreferences(state.profile.settings);
+    setStatus("Персонализация сохранена", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function handleSaveAssistantSettings(event) {
+  event.preventDefault();
+  const payload = {
+    assistant_tone: settingsAssistantToneSelect?.value || "friendly",
+    assistant_detail: settingsAssistantDetailSelect?.value || "concise",
+    assistant_tips_suggest_habits: !!settingsAssistantSuggestHabits?.checked,
+    assistant_tips_overdue_tasks: !!settingsAssistantOverdue?.checked,
+  };
+  try {
+    const saved = await apiFetch("/users/me/settings", { method: "PUT", body: JSON.stringify(payload) });
+    state.profile.settings = { ...state.profile.settings, ...(saved || payload) };
+    setStatus("Настройки ассистента сохранены", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
 async function loadProfile() {
   try {
     const [user, stats, settings] = await Promise.all([
@@ -314,6 +440,188 @@ async function loadProfile() {
     updateUserMeta();
   } catch (error) {
     renderProfile();
+    setStatus(error.message, "error");
+  }
+}
+
+async function handleExportData() {
+  try {
+    const data = await apiFetch("/users/me/export");
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "planner-export.json";
+    link.click();
+    URL.revokeObjectURL(url);
+    setStatus("Экспорт готов", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function handleCleanup(type) {
+  const confirmations = {
+    tasks: "Вы уверены, что хотите удалить все выполненные задачи? Это действие нельзя отменить.",
+    habit_logs: "Вы уверены, что хотите удалить все журналы привычек? Это действие нельзя отменить.",
+  };
+  if (!confirm(confirmations[type] || "Подтвердите действие")) return;
+  const path = type === "habit_logs" ? "/users/me/cleanup/habit-logs" : "/users/me/cleanup/completed-tasks";
+  try {
+    const result = await apiFetch(path, { method: "POST" });
+    const deleted = result?.deleted ?? 0;
+    const message =
+      type === "habit_logs"
+        ? `Удалено записей журналов: ${deleted}`
+        : `Удалено выполненных задач: ${deleted}`;
+    setStatus(message, "success");
+    await Promise.all([loadTasks(), loadHabits()]);
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function handleCreateGoal(event) {
+  event.preventDefault();
+  const payload = {
+    title: goalTitleInput?.value || "",
+    description: goalDescriptionInput?.value || "",
+    target_date: goalTargetDateInput?.value || null,
+    category_id: Number(goalCategorySelect?.value) || null,
+  };
+  if (!payload.title.trim()) {
+    setStatus("Название цели не может быть пустым", "error");
+    return;
+  }
+  try {
+    await apiFetch("/goals", { method: "POST", body: JSON.stringify(payload) });
+    setStatus("Цель добавлена", "success");
+    goalForm?.reset();
+    if (goalCategorySelect) goalCategorySelect.value = "";
+    await loadGoals();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function loadGoals() {
+  try {
+    const goals = await apiFetch("/goals");
+    state.profile.goals = goals || [];
+    renderGoals();
+  } catch (error) {
+    state.profile.goals = [];
+    renderGoals();
+    setStatus(error.message, "error");
+  }
+}
+
+function renderGoals() {
+  if (!goalList) return;
+  goalList.innerHTML = "";
+  if (!state.profile.goals.length) {
+    goalList.innerHTML = '<p class="muted">Целей пока нет</p>';
+    return;
+  }
+  state.profile.goals.forEach((goal) => {
+    const card = document.createElement("article");
+    card.className = "card entry";
+    const header = document.createElement("header");
+    header.className = "card-header";
+    const titleWrap = document.createElement("div");
+    const categoryLabel = goal.category?.name ? ` · ${goal.category.name}` : "";
+    titleWrap.innerHTML = `
+      <strong>${goal.title}${categoryLabel}</strong>
+      <p class="muted entry-description">${goal.description || "Описание не заполнено"}</p>
+    `;
+    const target = document.createElement("span");
+    target.className = "badge";
+    target.textContent = goal.target_date ? `Срок: ${goal.target_date}` : "Срок не задан";
+    header.append(titleWrap, target);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "ghost-btn";
+    editBtn.textContent = "Редактировать";
+    editBtn.onclick = () => openGoalEditor(goal, card);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "Удалить";
+    deleteBtn.onclick = () => deleteGoal(goal.id);
+    actions.append(editBtn, deleteBtn);
+
+    card.append(header, actions);
+    goalList.appendChild(card);
+  });
+}
+
+function openGoalEditor(goal, card) {
+  card.querySelectorAll(".inline-editor").forEach((el) => el.remove());
+  const form = document.createElement("form");
+  form.className = "inline-editor form-grid";
+  const titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.value = goal.title;
+  const descInput = document.createElement("input");
+  descInput.type = "text";
+  descInput.value = goal.description || "";
+  const dateInput = document.createElement("input");
+  dateInput.type = "date";
+  dateInput.value = goal.target_date || "";
+  const categorySelect = document.createElement("select");
+  setupCategorySelect(categorySelect, goal.category_id);
+
+  form.append(
+    labelWrap("Название", titleInput),
+    labelWrap("Описание", descInput),
+    labelWrap("Целевая дата", dateInput),
+    labelWrap("Категория", categorySelect),
+  );
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.textContent = "Сохранить";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "ghost-btn";
+  cancelBtn.textContent = "Отмена";
+  cancelBtn.onclick = () => form.remove();
+  actions.append(saveBtn, cancelBtn);
+  form.append(actions);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const payload = {
+      title: titleInput.value,
+      description: descInput.value,
+      target_date: dateInput.value || null,
+      category_id: Number(categorySelect.value) || null,
+    };
+    await saveGoal(goal.id, payload, form);
+  });
+  card.appendChild(form);
+}
+
+async function saveGoal(goalId, payload, formNode) {
+  try {
+    await apiFetch(`/goals/${goalId}`, { method: "PATCH", body: JSON.stringify(payload) });
+    setStatus("Цель обновлена", "success");
+    formNode?.remove();
+    await loadGoals();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function deleteGoal(goalId) {
+  if (!confirm("Удалить цель?")) return;
+  try {
+    await apiFetch(`/goals/${goalId}`, { method: "DELETE" });
+    setStatus("Цель удалена", "success");
+    await loadGoals();
+  } catch (error) {
     setStatus(error.message, "error");
   }
 }
@@ -547,6 +855,7 @@ function renderTaxonomy() {
 const syncCreationSelectors = () => {
   setupCategorySelect(taskCategorySelect);
   setupCategorySelect(habitCategorySelect);
+  setupCategorySelect(goalCategorySelect);
   setupTagSelect(taskTagsSelect);
   setupTagSelect(habitTagsSelect);
 };
@@ -1285,5 +1594,5 @@ async function apiFetch(path, options = {}) {
 
 async function refreshAll() {
   await loadTaxonomy();
-  await Promise.all([loadTasks(), loadHabits(), loadReminders(), loadProfile()]);
+  await Promise.all([loadTasks(), loadHabits(), loadReminders(), loadProfile(), loadGoals()]);
 }

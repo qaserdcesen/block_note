@@ -6,5 +6,5 @@ class Base(DeclarativeBase):
 
 
 # Import models for metadata registration
-from app.models import category, habit, message, notification, reminder, tag, task, user  # noqa: E402,F401
+from app.models import category, goal, habit, message, notification, reminder, tag, task, user  # noqa: E402,F401
 

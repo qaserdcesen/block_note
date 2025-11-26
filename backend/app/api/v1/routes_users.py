@@ -32,3 +32,20 @@ def update_user_settings(
     current_user: User = Depends(get_current_user),
 ):
     return user_service.update_user_settings(db, user_id=current_user.id, data=data)
+
+
+@router.get("/me/export")
+def export_user_data(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return user_service.export_user_data(db, user_id=current_user.id)
+
+
+@router.post("/me/cleanup/completed-tasks")
+def cleanup_completed_tasks(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    deleted = user_service.cleanup_completed_tasks(db, user_id=current_user.id)
+    return {"deleted": deleted}
+
+
+@router.post("/me/cleanup/habit-logs")
+def cleanup_habit_logs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    deleted = user_service.cleanup_habit_logs(db, user_id=current_user.id)
+    return {"deleted": deleted}
