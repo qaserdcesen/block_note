@@ -1,19 +1,20 @@
 import React from "react";
 
-type TaskStatus = "pending" | "in_progress" | "done" | "blocked";
+type ReminderStatus = "scheduled" | "sent" | "snoozed";
 
-export type TaskListProps = {
-  tasks: {
+export type ReminderListProps = {
+  reminders: {
     id: string;
     title: string;
     emoji?: string;
     description: string;
-    status: TaskStatus;
-    dueDate: string;
-    dueTime: string;
+    date: string;
+    time: string;
+    channels: string[];
     tags: string[];
     category: string;
     priority: number;
+    status: ReminderStatus;
     progress: number;
   }[];
 };
@@ -26,36 +27,29 @@ const colors = {
   accent: "#6b8bff",
   accentAlt: "#9c7cff",
   danger: "#ff6b6b",
-  success: "#5ad4ac",
 };
 
 const statusMeta: Record<
-  TaskStatus,
+  ReminderStatus,
   { label: string; tone: string; text: string; icon: string }
 > = {
-  pending: {
-    label: "В ожидании",
+  scheduled: {
+    label: "Запланировано",
     tone: "rgba(107, 139, 255, 0.16)",
     text: "#cfd8ff",
-    icon: "⏳",
+    icon: "🕒",
   },
-  in_progress: {
-    label: "В работе",
-    tone: "rgba(255, 196, 87, 0.16)",
-    text: "#ffd482",
-    icon: "⚙️",
-  },
-  done: {
-    label: "Готово",
+  sent: {
+    label: "Отправлено",
     tone: "rgba(90, 212, 172, 0.18)",
     text: "#abf2dd",
     icon: "✅",
   },
-  blocked: {
-    label: "Заблокировано",
-    tone: "rgba(255, 107, 107, 0.15)",
-    text: "#ffc7c7",
-    icon: "🚧",
+  snoozed: {
+    label: "Отложено",
+    tone: "rgba(255, 196, 87, 0.18)",
+    text: "#ffd482",
+    icon: "😴",
   },
 };
 
@@ -89,7 +83,6 @@ const TagChip: React.FC<{
   onRemove?: (label: string) => void;
 }> = ({ label, editable, onRemove }) => {
   const [hovered, setHovered] = React.useState(false);
-
   const showClose = editable && hovered;
 
   return (
@@ -101,7 +94,6 @@ const TagChip: React.FC<{
         ...chipBase,
         padding: "6px 10px",
         background: "rgba(255,255,255,0.07)",
-        borderColor: "rgba(255,255,255,0.12)",
       }}
     >
       <span style={{ color: colors.muted }}>#</span>
@@ -133,14 +125,14 @@ const TagChip: React.FC<{
 };
 
 const StatusPill: React.FC<{
-  status: TaskStatus;
+  status: ReminderStatus;
   editable?: boolean;
-  onSelect?: (status: TaskStatus) => void;
+  onSelect?: (status: ReminderStatus) => void;
 }> = ({ status, editable, onSelect }) => {
   const [open, setOpen] = React.useState(false);
   const meta = statusMeta[status];
 
-  const handleSelect = (value: TaskStatus) => {
+  const handleSelect = (value: ReminderStatus) => {
     onSelect?.(value);
     setOpen(false);
   };
@@ -187,7 +179,7 @@ const StatusPill: React.FC<{
             <button
               key={key}
               type="button"
-              onClick={() => handleSelect(key as TaskStatus)}
+              onClick={() => handleSelect(key as ReminderStatus)}
               style={{
                 ...chipBase,
                 width: "100%",
@@ -213,7 +205,7 @@ const ProgressLine: React.FC<{ value: number }> = ({ value }) => (
     <div
       style={{
         flex: 1,
-        height: 12,
+        height: 10,
         borderRadius: 999,
         background: "rgba(255,255,255,0.08)",
         boxShadow: "inset 0 1px 2px rgba(0,0,0,0.4)",
@@ -235,39 +227,28 @@ const ProgressLine: React.FC<{ value: number }> = ({ value }) => (
   </div>
 );
 
-const TaskCard: React.FC<{ task: TaskListProps["tasks"][number] }> = ({ task }) => {
-  const [localTask, setLocalTask] = React.useState(task);
+const ReminderCard: React.FC<{ reminder: ReminderListProps["reminders"][number] }> = ({ reminder }) => {
+  const [localReminder, setLocalReminder] = React.useState(reminder);
   const [isEditing, setIsEditing] = React.useState(false);
   const [tagDraft, setTagDraft] = React.useState("");
 
-  React.useEffect(() => setLocalTask(task), [task]);
+  React.useEffect(() => setLocalReminder(reminder), [reminder]);
 
   const handleTagRemove = (label: string) => {
     if (!isEditing) return;
-    setLocalTask((prev) => ({ ...prev, tags: prev.tags.filter((tag) => tag !== label) }));
+    setLocalReminder((prev) => ({ ...prev, tags: prev.tags.filter((tag) => tag !== label) }));
   };
 
   const handleTagAdd = () => {
     const next = tagDraft.trim();
     if (!next || !isEditing) return;
-    setLocalTask((prev) => ({ ...prev, tags: Array.from(new Set([...prev.tags, next])) }));
+    setLocalReminder((prev) => ({ ...prev, tags: Array.from(new Set([...prev.tags, next])) }));
     setTagDraft("");
   };
 
-  const toggleComplete = () => {
-    setLocalTask((prev) => {
-      const isDone = prev.status === "done" || prev.progress === 100;
-      if (isDone) {
-        return { ...prev, status: "in_progress", progress: Math.min(prev.progress, 65) };
-      }
-      return { ...prev, status: "done", progress: 100 };
-    });
-  };
-
   return (
-    <li
+    <div
       style={{
-        listStyle: "none",
         background: colors.card,
         borderRadius: 24,
         border: `1px solid ${colors.stroke}`,
@@ -277,20 +258,20 @@ const TaskCard: React.FC<{ task: TaskListProps["tasks"][number] }> = ({ task }) 
         gap: 14,
       }}
     >
-      <div style={{ display: "flex", gap: 14, justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ display: "grid", gap: 6, minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <div
               aria-hidden
               style={{
-                width: 42,
-                height: 42,
-                borderRadius: 14,
+                width: 38,
+                height: 38,
+                borderRadius: 12,
                 background: "linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02))",
                 display: "grid",
                 placeItems: "center",
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
-                fontSize: 22,
+                fontSize: 20,
                 overflow: "hidden",
               }}
             >
@@ -302,47 +283,45 @@ const TaskCard: React.FC<{ task: TaskListProps["tasks"][number] }> = ({ task }) 
                     height: "100%",
                     padding: 0,
                     textAlign: "center",
-                    fontSize: 18,
+                    fontSize: 16,
                     background: "transparent",
                     border: "none",
                   }}
                   maxLength={4}
-                  value={localTask.emoji || ""}
-                  onChange={(e) => setLocalTask((prev) => ({ ...prev, emoji: e.target.value }))}
-                  aria-label="Эмоджи задачи"
+                  value={localReminder.emoji || ""}
+                  onChange={(e) => setLocalReminder((prev) => ({ ...prev, emoji: e.target.value }))}
+                  aria-label="Эмоджи напоминания"
                 />
               ) : (
-                localTask.emoji || "🍦"
+                localReminder.emoji || "🔔"
               )}
             </div>
             {isEditing ? (
               <input
-                style={{ ...softFieldStyle, fontSize: 18, fontWeight: 700 }}
-                value={localTask.title}
-                onChange={(e) => setLocalTask((prev) => ({ ...prev, title: e.target.value }))}
-                aria-label="Название задачи"
+                style={{ ...softFieldStyle, fontSize: 17, fontWeight: 700 }}
+                value={localReminder.title}
+                onChange={(e) => setLocalReminder((prev) => ({ ...prev, title: e.target.value }))}
+                aria-label="Название напоминания"
               />
             ) : (
-              <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.02, color: colors.text }}>
-                {localTask.title}
-              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: colors.text }}>{localReminder.title}</div>
             )}
           </div>
           {isEditing ? (
             <textarea
-              style={{ ...softFieldStyle, resize: "vertical", minHeight: 64 }}
-              value={localTask.description}
-              onChange={(e) => setLocalTask((prev) => ({ ...prev, description: e.target.value }))}
-              aria-label="Описание задачи"
+              style={{ ...softFieldStyle, resize: "vertical", minHeight: 58 }}
+              value={localReminder.description}
+              onChange={(e) => setLocalReminder((prev) => ({ ...prev, description: e.target.value }))}
+              aria-label="Описание напоминания"
             />
           ) : (
-            <div style={{ color: colors.muted, fontSize: 14, lineHeight: 1.5 }}>{localTask.description}</div>
+            <div style={{ color: colors.muted, fontSize: 14, lineHeight: 1.5 }}>{localReminder.description}</div>
           )}
         </div>
         <StatusPill
-          status={localTask.status}
+          status={localReminder.status}
           editable={isEditing}
-          onSelect={(next) => setLocalTask((prev) => ({ ...prev, status: next }))}
+          onSelect={(next) => setLocalReminder((prev) => ({ ...prev, status: next }))}
         />
       </div>
 
@@ -351,43 +330,54 @@ const TaskCard: React.FC<{ task: TaskListProps["tasks"][number] }> = ({ task }) 
           display: "grid",
           gap: 10,
           gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          alignItems: "stretch",
         }}
       >
         <div style={{ ...chipBase, flexWrap: "wrap", background: "rgba(255,255,255,0.05)" }}>
           <span aria-hidden>📅</span>
           <div style={{ display: "grid", gap: 2 }}>
-            <span style={{ color: colors.muted, fontSize: 12 }}>Срок</span>
-            <span>{localTask.dueDate}</span>
+            <span style={{ color: colors.muted, fontSize: 12 }}>Дата</span>
+            <span>{localReminder.date}</span>
           </div>
           <span aria-hidden style={{ marginLeft: 8 }}>
             ⏰
           </span>
           <div style={{ display: "grid", gap: 2 }}>
             <span style={{ color: colors.muted, fontSize: 12 }}>Время</span>
-            <span>{localTask.dueTime}</span>
+            <span>{localReminder.time}</span>
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ ...chipBase, background: "rgba(255,255,255,0.05)" }}>
+          <div style={{ ...chipBase }}>
             <span aria-hidden>🏷</span>
             <span style={{ color: colors.muted, fontSize: 12 }}>Категория</span>
-            <strong>{localTask.category}</strong>
+            <strong>{localReminder.category}</strong>
           </div>
-          <div style={{ ...chipBase, background: "rgba(255,255,255,0.05)" }}>
+          <div style={{ ...chipBase }}>
             <span aria-hidden>⭐</span>
             <span style={{ color: colors.muted, fontSize: 12 }}>Приоритет</span>
-            <strong>{localTask.priority}</strong>
+            <strong>{localReminder.priority}</strong>
           </div>
         </div>
       </div>
 
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ color: colors.muted, fontSize: 13 }}>Каналы</span>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {localReminder.channels.map((channel) => (
+              <div key={channel} style={{ ...chipBase, background: "rgba(255,255,255,0.07)" }}>
+                <span aria-hidden>📡</span>
+                {channel}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ color: colors.muted, fontSize: 13 }}>Теги</span>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
-            {localTask.tags.map((tag) => (
+            {localReminder.tags.map((tag) => (
               <TagChip key={tag} label={tag} editable={isEditing} onRemove={handleTagRemove} />
             ))}
             {isEditing ? (
@@ -413,27 +403,13 @@ const TaskCard: React.FC<{ task: TaskListProps["tasks"][number] }> = ({ task }) 
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ display: "grid", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={toggleComplete}
-            style={{
-              ...chipBase,
-              padding: "8px 12px",
-              background:
-                localTask.status === "done" || localTask.progress === 100
-                  ? "rgba(90,212,172,0.16)"
-                  : "rgba(255,255,255,0.05)",
-              color: localTask.status === "done" ? colors.success : colors.text,
-              borderColor: "rgba(255,255,255,0.08)",
-              cursor: "pointer",
-            }}
-          >
-            <span aria-hidden>{localTask.status === "done" || localTask.progress === 100 ? "✔" : "○"}</span> Готово
-          </button>
+          <span style={{ ...chipBase, padding: "8px 10px", background: "rgba(255,255,255,0.05)" }}>
+            ⏱ Готовность
+          </span>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <ProgressLine value={localTask.progress} />
+            <ProgressLine value={localReminder.progress} />
           </div>
         </div>
       </div>
@@ -485,22 +461,22 @@ const TaskCard: React.FC<{ task: TaskListProps["tasks"][number] }> = ({ task }) 
           🗑 Удалить
         </button>
       </div>
-    </li>
+    </div>
   );
 };
 
-const TaskList: React.FC<TaskListProps> = ({ tasks }) => {
-  if (!tasks.length) {
-    return <div style={{ color: colors.muted }}>Нет задач для отображения</div>;
+const ReminderList: React.FC<ReminderListProps> = ({ reminders }) => {
+  if (!reminders.length) {
+    return <div style={{ color: colors.muted }}>Нет напоминаний для отображения</div>;
   }
 
   return (
-    <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 16 }}>
-      {tasks.map((task) => (
-        <TaskCard key={task.id} task={task} />
+    <div style={{ display: "grid", gap: 16 }}>
+      {reminders.map((reminder) => (
+        <ReminderCard key={reminder.id} reminder={reminder} />
       ))}
-    </ul>
+    </div>
   );
 };
 
-export default TaskList;
+export default ReminderList;

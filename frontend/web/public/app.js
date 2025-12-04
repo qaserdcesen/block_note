@@ -6,6 +6,23 @@ const initialTimezone =
 
 const ADD_CATEGORY_VALUE = "__add_category__";
 const ADD_TAG_VALUE = "__add_tag__";
+const EMOJI_STORAGE_KEY = "cthm_emojis";
+
+const loadEmojiStore = () => {
+  try {
+    return JSON.parse(localStorage.getItem(EMOJI_STORAGE_KEY) || '{"tasks":{},"habits":{},"reminders":{}}');
+  } catch {
+    return { tasks: {}, habits: {}, reminders: {} };
+  }
+};
+
+const persistEmojis = (store) => {
+  try {
+    localStorage.setItem(EMOJI_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    /* ignore */
+  }
+};
 
 const state = {
   currentPage: "tasks-page",
@@ -15,6 +32,7 @@ const state = {
   habits: [],
   categories: [],
   tags: [],
+  emojis: loadEmojiStore(),
   ui: {
     taskSearch: "",
     taskSort: "date_desc",
@@ -113,6 +131,15 @@ const pages = {
   "assistant-page": el("assistant-page"),
   "profile-page": el("profile-page"),
 };
+
+const setEmoji = (type, id, value) => {
+  if (!id) return;
+  const next = { ...state.emojis, [type]: { ...(state.emojis?.[type] || {}), [id]: value } };
+  state.emojis = next;
+  persistEmojis(next);
+};
+
+const emojiFor = (type, id, fallback) => (state.emojis?.[type]?.[id] || fallback || "").trim() || fallback;
 
 const formatUsername = (username) => {
   if (!username) return "";
@@ -898,9 +925,41 @@ async function loadTasks() {
 }
 
 function taskStatusLabel(status) {
-  const map = { pending: "В ожидании", in_progress: "В работе", done: "Готово", cancelled: "Отменено" };
+  const map = { pending: "В ожидании", in_progress: "В работе", done: "Готово", cancelled: "Отменено", blocked: "Заблокировано" };
   return map[status] || "-";
 }
+
+const statusPillClass = (key) => `status-${key || "pending"}`;
+
+const createMetaChip = (icon, label, value) => {
+  const chip = document.createElement("div");
+  chip.className = "meta-chip";
+  chip.innerHTML = `
+    <span aria-hidden="true">${icon}</span>
+    <div class="meta-chip__text">
+      <div class="meta-chip__label">${label}</div>
+      <div>${value}</div>
+    </div>
+  `;
+  return chip;
+};
+
+const createTagChip = (label, removable = false, onRemove = null) => {
+  const chip = document.createElement("div");
+  chip.className = "tag-chip";
+  const text = document.createElement("span");
+  text.textContent = label;
+  chip.appendChild(text);
+  if (removable) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "remove";
+    btn.textContent = "×";
+    btn.onclick = () => onRemove && onRemove(label);
+    chip.appendChild(btn);
+  }
+  return chip;
+};
 
 function renderTasks(tasks) {
   const search = (state.ui?.taskSearch || "").toLowerCase();
@@ -916,96 +975,145 @@ function renderTasks(tasks) {
     return;
   }
   sorted.forEach((task) => {
-    const statusKey = completionStatusFromValue(task.completion_value);
+    const statusKey = (task.status || completionStatusFromValue(task.completion_value) || "pending").toLowerCase();
     const statusLabel = taskStatusLabel(statusKey);
-    const dueLabel = task.due_datetime
-      ? new Date(task.due_datetime).toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" })
+    const dueDate = task.due_datetime ? new Date(task.due_datetime) : null;
+    const dueDateLabel = dueDate
+      ? dueDate.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" })
       : "Без даты";
+    const dueTimeLabel = dueDate ? dueDate.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "--:--";
     const categoryLabel = task.category?.name || "Без категории";
-    const tagsLabel = task.tags?.length ? task.tags.map((t) => `#${t.name}`).join(", ") : "Теги не выбраны";
+    const tags = task.tags || [];
+    const priorityValue = task.priority ?? 0;
+    const progressValue = clamp(task.completion_value || 0, 0, 100);
+    const emoji = emojiFor("tasks", task.id, task.emoji || "🍦");
 
     const card = document.createElement("article");
-    card.className = "card entry";
+    card.className = "card entry neo-card task-card";
 
-    const header = document.createElement("header");
-    header.className = "card-header";
-
+    const header = document.createElement("div");
+    header.className = "task-head";
     const titleWrap = document.createElement("div");
+    titleWrap.className = "task-title-block";
     titleWrap.innerHTML = `
-      <strong>${task.title}</strong>
-      <p class="muted entry-description">${task.description || "Описание не заполнено"}</p>
+      <div class="task-emoji">${emoji}</div>
+      <div class="task-title-text">
+        <div class="task-title">${task.title}</div>
+        <p class="muted entry-description">${task.description || "Описание не заполнено"}</p>
+      </div>
     `;
-
-    const priorityBadge = document.createElement("span");
-    priorityBadge.className = "badge";
-    priorityBadge.textContent = `Приоритет ${task.priority}`;
+    const statusEl = document.createElement("span");
+    statusEl.className = `status-pill ${statusPillClass(statusKey)}`;
+    statusEl.textContent = statusLabel;
+    header.append(titleWrap, statusEl);
 
     const body = document.createElement("div");
-    body.className = "card-body";
-    const statusRow = document.createElement("p");
-    statusRow.innerHTML = `Статус: <span class="badge badge-neutral">${statusLabel}</span>`;
-    const dueRow = document.createElement("p");
-    dueRow.innerHTML = `Срок: <span class="badge badge-neutral">${dueLabel}</span>`;
-    const categoryRow = document.createElement("p");
-    categoryRow.className = "muted";
-    categoryRow.textContent = `Категория: ${categoryLabel}`;
-    const tagsRow = document.createElement("p");
-    tagsRow.className = "muted";
-    tagsRow.textContent = `Теги: ${tagsLabel}`;
-    body.append(statusRow, dueRow, categoryRow, tagsRow);
+    body.className = "card-body task-body";
 
-    const controls = document.createElement("div");
-    controls.className = "actions stack";
+    const metaGrid = document.createElement("div");
+    metaGrid.className = "meta-grid";
+    metaGrid.append(
+      createMetaChip("📅", "Срок", dueDateLabel),
+      createMetaChip("⏰", "Время", dueTimeLabel),
+      createMetaChip("🏷", "Категория", categoryLabel),
+      createMetaChip("⭐", "Приоритет", priorityValue || "-")
+    );
 
+    const tagsRow = document.createElement("div");
+    tagsRow.className = "tag-row";
+    const tagsLabel = document.createElement("span");
+    tagsLabel.className = "muted";
+    tagsLabel.textContent = "Теги";
+    const tagsWrap = document.createElement("div");
+    tagsWrap.className = "tag-chip-wrap";
+    if (!tags.length) {
+      tagsWrap.innerHTML = '<span class="muted">Теги не выбраны</span>';
+    } else {
+      tags.forEach((tag) => tagsWrap.appendChild(createTagChip(`#${tag.name}`)));
+    }
+    tagsRow.append(tagsLabel, tagsWrap);
+
+    const progressWrap = document.createElement("div");
+    progressWrap.className = "progress-shell";
+    const doneBtn = document.createElement("button");
+    doneBtn.type = "button";
+    doneBtn.className = "ghost-pill";
+    doneBtn.textContent = progressValue >= 100 ? "✔ Готово" : "○ Готово";
+
+    const progressStack = document.createElement("div");
+    progressStack.className = "progress-stack";
+    const progressLine = document.createElement("div");
+    progressLine.className = "progress-line";
+    const progressFill = document.createElement("div");
+    progressFill.className = "progress-line__fill";
+    progressFill.style.width = `${progressValue}%`;
+    progressLine.appendChild(progressFill);
+
+    const progressSlider = document.createElement("input");
+    progressSlider.type = "range";
+    progressSlider.min = 0;
+    progressSlider.max = 100;
+    progressSlider.step = 5;
+    progressSlider.value = progressValue;
+    progressSlider.className = "progress-slider";
+    const progressPercent = document.createElement("span");
+    progressPercent.className = "progress-percent";
+    progressPercent.textContent = `${progressValue}%`;
+    progressSlider.addEventListener("input", () => {
+      const normalized = normalizeCompletionValue(progressSlider.value);
+      progressSlider.value = normalized;
+      progressFill.style.width = `${normalized}%`;
+      progressPercent.textContent = `${normalized}%`;
+    });
+    progressSlider.addEventListener("change", () => updateTaskCompletion(task.id, progressSlider.value));
+    doneBtn.onclick = () => {
+      const current = normalizeCompletionValue(progressSlider.value);
+      const next = current >= 100 ? 0 : 100;
+      progressSlider.value = next;
+      progressFill.style.width = `${next}%`;
+      progressPercent.textContent = `${next}%`;
+      updateTaskCompletion(task.id, next);
+    };
+    progressStack.append(progressLine, progressSlider);
+    progressWrap.append(doneBtn, progressStack, progressPercent);
+
+    const detailsWrap = document.createElement("div");
+    detailsWrap.className = "task-details";
+    detailsWrap.append(metaGrid, tagsRow, progressWrap);
+
+    const actions = document.createElement("div");
+    actions.className = "action-row";
     const editBtn = document.createElement("button");
     editBtn.type = "button";
-    editBtn.className = "ghost-btn";
-    editBtn.textContent = "Редактировать";
+    editBtn.className = "btn-soft";
+    editBtn.textContent = "✏ Редактировать";
     editBtn.onclick = () => openTaskEditor(task, card);
-
-    const completionControls = document.createElement("div");
-    completionControls.className = "completion-controls";
-    const doneLabel = document.createElement("label");
-    doneLabel.className = "checkbox-inline";
-    const doneToggle = document.createElement("input");
-    doneToggle.type = "checkbox";
-    doneToggle.checked = task.completion_value >= 100;
-    const valueInput = document.createElement("input");
-    valueInput.type = "range";
-    valueInput.min = 0;
-    valueInput.max = 100;
-    valueInput.step = 5;
-    valueInput.value = task.completion_value;
-    valueInput.className = "completion-slider";
-    const valueBadge = document.createElement("span");
-    valueBadge.className = "badge badge-neutral";
-    valueBadge.textContent = `${valueInput.value}%`;
-    valueInput.addEventListener("input", () => {
-      const normalized = normalizeCompletionValue(valueInput.value);
-      valueInput.value = normalized;
-      valueBadge.textContent = `${normalized}%`;
-      doneToggle.checked = normalized >= 100;
-    });
-    valueInput.addEventListener("change", () => updateTaskCompletion(task.id, valueInput.value));
-    doneToggle.onchange = () => {
-      const nextValue = doneToggle.checked ? 100 : 0;
-      valueInput.value = nextValue;
-      valueBadge.textContent = `${nextValue}%`;
-      updateTaskCompletion(task.id, nextValue);
-    };
-    doneLabel.append(doneToggle, document.createTextNode("Готово"));
-    completionControls.append(doneLabel, valueInput, valueBadge);
-
+    const collapseBtn = document.createElement("button");
+    collapseBtn.type = "button";
+    collapseBtn.className = "btn-soft ghost";
+    collapseBtn.textContent = "Свернуть";
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
-    deleteBtn.textContent = "Удалить";
+    deleteBtn.className = "btn-danger";
+    deleteBtn.textContent = "🗑 Удалить";
     deleteBtn.onclick = () => deleteTask(task.id);
-    controls.append(editBtn, completionControls, deleteBtn);
+    actions.append(editBtn, collapseBtn, deleteBtn);
 
-    const collapseBtn = createCollapseToggle(card, body);
-    header.append(titleWrap, priorityBadge, collapseBtn);
+    let collapsed = false;
+    const applyCollapsed = () => {
+      detailsWrap.hidden = collapsed;
+      statusEl.hidden = collapsed;
+      collapseBtn.textContent = collapsed ? "Развернуть" : "Свернуть";
+      card.classList.toggle("collapsed", collapsed);
+    };
+    collapseBtn.onclick = () => {
+      collapsed = !collapsed;
+      applyCollapsed();
+    };
+    applyCollapsed();
+
+    body.append(detailsWrap, actions);
     card.append(header, body);
-    body.appendChild(controls);
     tasksList.appendChild(card);
   });
 }
@@ -1038,42 +1146,145 @@ function createCollapseToggle(card, body) {
 
 function openTaskEditor(task, card) {
   card.querySelectorAll(".inline-editor").forEach((el) => el.remove());
+  card.classList.add("editing");
   const { date, time } = splitDateTimeParts(task.due_datetime);
   const form = document.createElement("form");
-  form.className = "inline-editor";
+  form.className = "inline-editor neo-editor";
+
+  const emojiInput = document.createElement("input");
+  emojiInput.type = "text";
+  emojiInput.maxLength = 4;
+  emojiInput.value = emojiFor("tasks", task.id, task.emoji || "🍦");
+  emojiInput.placeholder = "Эмоджи";
 
   const titleInput = document.createElement("input");
   titleInput.type = "text";
   titleInput.value = task.title;
-  const descriptionInput = document.createElement("input");
-  descriptionInput.type = "text";
+  const descriptionInput = document.createElement("textarea");
   descriptionInput.value = task.description || "";
+
+  const statusSelect = document.createElement("select");
+  const statusOptions = [
+    { value: "pending", label: "В ожидании" },
+    { value: "in_progress", label: "В работе" },
+    { value: "done", label: "Готово" },
+    { value: "cancelled", label: "Отменено" },
+  ];
+  const statusValue = task.status || completionStatusFromValue(task.completion_value);
+  statusOptions.forEach(({ value, label }) => {
+    const opt = new Option(label, value, false, value === statusValue);
+    statusSelect.appendChild(opt);
+  });
+
   const dateInput = document.createElement("input");
   dateInput.type = "date";
   dateInput.value = date || tasksDateInput.value;
   const timeInput = document.createElement("input");
   timeInput.type = "time";
   timeInput.value = time || "09:00";
+
   const priorityInput = document.createElement("input");
   priorityInput.type = "number";
   priorityInput.min = 1;
   priorityInput.max = 10;
   priorityInput.value = task.priority;
+
   const categorySelect = document.createElement("select");
   setupCategorySelect(categorySelect, task.category_id);
+
   const tagSelect = document.createElement("select");
   tagSelect.multiple = true;
   tagSelect.size = 4;
+  tagSelect.style.display = "none";
   setupTagSelect(tagSelect, task.tags?.map((t) => t.id) || []);
 
+  const tagChips = document.createElement("div");
+  tagChips.className = "tag-chip-wrap";
+  const tagRow = document.createElement("div");
+  tagRow.className = "chip-row";
+  tagRow.appendChild(tagChips);
+  const tagInput = document.createElement("input");
+  tagInput.type = "text";
+  tagInput.placeholder = "Новый тег";
+  const tagDataList = document.createElement("datalist");
+  const tagDataListId = `tag-options-task-${task.id}`;
+  tagDataList.id = tagDataListId;
+  state.tags.forEach((t) => {
+    const opt = document.createElement("option");
+    opt.value = t.name;
+    tagDataList.appendChild(opt);
+  });
+  tagInput.setAttribute("list", tagDataListId);
+  const tagAddBtn = document.createElement("button");
+  tagAddBtn.type = "button";
+  tagAddBtn.className = "ghost-pill";
+  tagAddBtn.textContent = "+";
+  const tagAddWrap = document.createElement("div");
+  tagAddWrap.className = "chip-add";
+  tagAddWrap.append(tagInput, tagAddBtn, tagDataList);
+
+  const renderTagChips = () => {
+    tagChips.innerHTML = "";
+    const selectedIds = readSelectedValues(tagSelect);
+    if (!selectedIds.length) {
+      tagChips.innerHTML = '<span class="muted">Теги не выбраны</span>';
+      return;
+    }
+    selectedIds.forEach((id) => {
+      const tag = state.tags.find((t) => t.id === id);
+      const chip = createTagChip(`#${tag?.name || id}`, true, () => {
+        Array.from(tagSelect.options).forEach((opt) => {
+          if (Number(opt.value) === id) opt.selected = false;
+        });
+        renderTagChips();
+      });
+      tagChips.appendChild(chip);
+    });
+  };
+
+  tagSelect.addEventListener("change", renderTagChips);
+  renderTagChips();
+
+  tagAddBtn.onclick = async (event) => {
+    event.preventDefault();
+    const name = (tagInput.value || "").trim();
+    if (!name) return;
+    let tag = state.tags.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (!tag) {
+      try {
+        tag = await apiFetch("/tags", { method: "POST", body: JSON.stringify({ name }) });
+        if (tag) {
+          state.tags.push(tag);
+          renderTaxonomy();
+        }
+      } catch (error) {
+        setStatus(error.message, "error");
+        return;
+      }
+    }
+    Array.from(tagSelect.options).forEach((opt) => {
+      if (Number(opt.value) === tag.id) opt.selected = true;
+    });
+    tagInput.value = "";
+    renderTagChips();
+  };
+
   form.append(
+    labelWrap("Эмоджи", emojiInput),
     labelWrap("Название", titleInput),
     labelWrap("Описание", descriptionInput),
+    labelWrap("Статус", statusSelect),
     labelWrap("Дата", dateInput),
     labelWrap("Время", timeInput),
     labelWrap("Приоритет (1-10)", priorityInput),
     labelWrap("Категория", categorySelect),
-    labelWrap("Теги", tagSelect)
+    labelWrap("Теги", tagSelect),
+    (() => {
+      const wrap = document.createElement("div");
+      wrap.className = "chip-input";
+      wrap.append(tagRow, tagAddWrap);
+      return wrap;
+    })()
   );
 
   const actions = document.createElement("div");
@@ -1085,12 +1296,17 @@ function openTaskEditor(task, card) {
   cancelBtn.type = "button";
   cancelBtn.className = "ghost-btn";
   cancelBtn.textContent = "Отмена";
-  cancelBtn.onclick = () => form.remove();
+  cancelBtn.onclick = () => {
+    card.classList.remove("editing");
+    form.remove();
+  };
   actions.append(saveBtn, cancelBtn);
   form.append(actions);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const emojiValue = (emojiInput.value || "").trim() || "🍦";
+    setEmoji("tasks", task.id, emojiValue);
     const payload = {
       title: titleInput.value,
       description: descriptionInput.value,
@@ -1098,8 +1314,10 @@ function openTaskEditor(task, card) {
       due_datetime: isoFromDateTime(dateInput.value, timeInput.value),
       category_id: Number(categorySelect.value) || null,
       tag_ids: readSelectedValues(tagSelect),
+      status: statusSelect.value,
     };
     await saveTaskEdit(task.id, payload, form);
+    card.classList.remove("editing");
   });
 
   const container = card.querySelector(".card-body") || card;
@@ -1222,92 +1440,143 @@ function renderHabits(habits) {
   }
   sorted.forEach((habit) => {
     const statusLabel = habitStatusText(habit);
+    const statusKey = habit.is_active === false ? "cancelled" : completionStatusFromValue(habit.completion_value);
     const categoryLabel = habit.category?.name || "Без категории";
-    const tagsLabel = habit.tags?.length ? habit.tags.map((t) => `#${t.name}`).join(", ") : "Теги не выбраны";
+    const tags = habit.tags || [];
     const scheduleLabel = habitScheduleLabel(habit.schedule_type);
+    const progressValue = clamp(habit.completion_value || 0, 0, 100);
+    const emoji = emojiFor("habits", habit.id, habit.emoji || "🌀");
+
     const card = document.createElement("article");
-    card.className = "card entry";
-    const header = document.createElement("header");
-    header.className = "card-header";
+    card.className = "card entry neo-card habit-card";
+
+    const header = document.createElement("div");
+    header.className = "habit-head";
     const titleWrap = document.createElement("div");
+    titleWrap.className = "habit-title-block";
     titleWrap.innerHTML = `
-      <strong>${habit.name}</strong>
-      <p class="muted entry-description">${habit.description || "Описание не заполнено"}</p>
+      <div class="habit-emoji">${emoji}</div>
+      <div class="habit-title-text">
+        <div class="habit-title">${habit.name}</div>
+        <p class="muted entry-description">${habit.description || "Описание не заполнено"}</p>
+      </div>
     `;
-    const scheduleBadge = document.createElement("span");
-    scheduleBadge.className = "badge";
-    scheduleBadge.textContent = scheduleLabel;
+    const statusEl = document.createElement("span");
+    statusEl.className = `status-pill ${statusPillClass(statusKey)}`;
+    statusEl.textContent = statusLabel;
+    header.append(titleWrap, statusEl);
 
     const body = document.createElement("div");
-    body.className = "card-body";
-    const statusRow = document.createElement("p");
-    statusRow.textContent = `Статус: ${statusLabel}`;
-    const categoryRow = document.createElement("p");
-    categoryRow.className = "muted";
-    categoryRow.textContent = `Категория: ${categoryLabel}`;
-    const tagsRow = document.createElement("p");
-    tagsRow.className = "muted";
-    tagsRow.textContent = `Теги: ${tagsLabel}`;
-    body.append(statusRow, categoryRow, tagsRow);
+    body.className = "card-body habit-body";
 
-    const controls = document.createElement("div");
-    controls.className = "actions stack";
+    const metaGrid = document.createElement("div");
+    metaGrid.className = "meta-grid";
+    metaGrid.append(
+      createMetaChip("📅", "График", scheduleLabel),
+      createMetaChip("🏷", "Категория", categoryLabel),
+      createMetaChip("⭐", "Приоритет", habit.priority ?? "-")
+    );
 
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.className = "ghost-btn";
-    editBtn.textContent = "Редактировать";
-    editBtn.onclick = () => openHabitEditor(habit, card);
+    const tagsRow = document.createElement("div");
+    tagsRow.className = "tag-row";
+    const tagsLabel = document.createElement("span");
+    tagsLabel.className = "muted";
+    tagsLabel.textContent = "Теги";
+    const tagsWrap = document.createElement("div");
+    tagsWrap.className = "tag-chip-wrap";
+    if (!tags.length) {
+      tagsWrap.innerHTML = '<span class="muted">Теги не выбраны</span>';
+    } else {
+      tags.forEach((tag) => tagsWrap.appendChild(createTagChip(`#${tag.name}`)));
+    }
+    tagsRow.append(tagsLabel, tagsWrap);
 
-    const completionControls = document.createElement("div");
-    completionControls.className = "completion-controls";
-    const doneLabel = document.createElement("label");
-    doneLabel.className = "checkbox-inline";
-    const doneToggle = document.createElement("input");
-    doneToggle.type = "checkbox";
-    doneToggle.checked = habit.completion_value >= 100;
-    const valueInput = document.createElement("input");
-    valueInput.type = "range";
-    valueInput.min = 0;
-    valueInput.max = 100;
-    valueInput.step = 5;
-    valueInput.value = habit.completion_value;
-    valueInput.className = "completion-slider";
-    const valueBadge = document.createElement("span");
-    valueBadge.className = "badge badge-neutral";
-    valueBadge.textContent = `${valueInput.value}%`;
-    valueInput.addEventListener("input", () => {
-      const normalized = normalizeCompletionValue(valueInput.value);
-      valueInput.value = normalized;
-      valueBadge.textContent = `${normalized}%`;
-      doneToggle.checked = normalized >= 100;
+    const progressWrap = document.createElement("div");
+    progressWrap.className = "progress-shell";
+    const doneBtn = document.createElement("button");
+    doneBtn.type = "button";
+    doneBtn.className = "ghost-pill";
+    doneBtn.textContent = progressValue >= 100 ? "✔ Готово" : "○ Готово";
+
+    const progressStack = document.createElement("div");
+    progressStack.className = "progress-stack";
+    const progressLine = document.createElement("div");
+    progressLine.className = "progress-line";
+    const progressFill = document.createElement("div");
+    progressFill.className = "progress-line__fill";
+    progressFill.style.width = `${progressValue}%`;
+    progressLine.appendChild(progressFill);
+
+    const progressSlider = document.createElement("input");
+    progressSlider.type = "range";
+    progressSlider.min = 0;
+    progressSlider.max = 100;
+    progressSlider.step = 5;
+    progressSlider.value = progressValue;
+    progressSlider.className = "progress-slider";
+    const progressPercent = document.createElement("span");
+    progressPercent.className = "progress-percent";
+    progressPercent.textContent = `${progressValue}%`;
+    progressSlider.addEventListener("input", () => {
+      const normalized = normalizeCompletionValue(progressSlider.value);
+      progressSlider.value = normalized;
+      progressFill.style.width = `${normalized}%`;
+      progressPercent.textContent = `${normalized}%`;
     });
-    valueInput.addEventListener("change", () => updateHabitCompletion(habit.id, valueInput.value));
-    doneToggle.onchange = () => {
-      const nextValue = doneToggle.checked ? 100 : 0;
-      valueInput.value = nextValue;
-      valueBadge.textContent = `${nextValue}%`;
-      updateHabitCompletion(habit.id, nextValue);
+    progressSlider.addEventListener("change", () => updateHabitCompletion(habit.id, progressSlider.value));
+    doneBtn.onclick = () => {
+      const current = normalizeCompletionValue(progressSlider.value);
+      const next = current >= 100 ? 0 : 100;
+      progressSlider.value = next;
+      progressFill.style.width = `${next}%`;
+      progressPercent.textContent = `${next}%`;
+      updateHabitCompletion(habit.id, next);
     };
-    doneLabel.append(doneToggle, document.createTextNode("Готово"));
-    completionControls.append(doneLabel, valueInput, valueBadge);
+    progressStack.append(progressLine, progressSlider);
+    progressWrap.append(doneBtn, progressStack, progressPercent);
 
+    const detailsWrap = document.createElement("div");
+    detailsWrap.className = "habit-details";
+    detailsWrap.append(metaGrid, tagsRow, progressWrap);
+
+    const actions = document.createElement("div");
+    actions.className = "action-row";
     const skipBtn = document.createElement("button");
     skipBtn.type = "button";
-    skipBtn.textContent = "Пропустить сегодня";
+    skipBtn.className = "ghost-pill";
+    skipBtn.textContent = "⏸ Пропустить сегодня";
     skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
-
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "btn-soft";
+    editBtn.textContent = "✏ Редактировать";
+    editBtn.onclick = () => openHabitEditor(habit, card);
+    const collapseBtn = document.createElement("button");
+    collapseBtn.type = "button";
+    collapseBtn.className = "btn-soft ghost";
+    collapseBtn.textContent = "Свернуть";
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
-    deleteBtn.textContent = "Удалить";
+    deleteBtn.className = "btn-danger";
+    deleteBtn.textContent = "🗑 Удалить";
     deleteBtn.onclick = () => deleteHabit(habit.id);
+    actions.append(skipBtn, editBtn, collapseBtn, deleteBtn);
 
-    controls.append(editBtn, completionControls, skipBtn, deleteBtn);
+    let collapsed = false;
+    const applyCollapsed = () => {
+      detailsWrap.hidden = collapsed;
+      statusEl.hidden = collapsed;
+      collapseBtn.textContent = collapsed ? "Развернуть" : "Свернуть";
+      card.classList.toggle("collapsed", collapsed);
+    };
+    collapseBtn.onclick = () => {
+      collapsed = !collapsed;
+      applyCollapsed();
+    };
+    applyCollapsed();
 
-    const collapseBtn = createCollapseToggle(card, body);
-    header.append(titleWrap, scheduleBadge, collapseBtn);
+    body.append(detailsWrap, actions);
     card.append(header, body);
-    body.appendChild(controls);
     habitsList.appendChild(card);
   });
 }
@@ -1380,15 +1649,22 @@ function sortHabits(list, sortKey) {
 
 function openHabitEditor(habit, card) {
   card.querySelectorAll(".inline-editor").forEach((el) => el.remove());
+  card.classList.add("editing");
   const form = document.createElement("form");
-  form.className = "inline-editor";
+  form.className = "inline-editor neo-editor";
+
+  const emojiInput = document.createElement("input");
+  emojiInput.type = "text";
+  emojiInput.maxLength = 4;
+  emojiInput.value = emojiFor("habits", habit.id, habit.emoji || "🌀");
+  emojiInput.placeholder = "Эмоджи";
 
   const nameInput = document.createElement("input");
   nameInput.type = "text";
   nameInput.value = habit.name;
-  const descInput = document.createElement("input");
-  descInput.type = "text";
+  const descInput = document.createElement("textarea");
   descInput.value = habit.description || "";
+
   const scheduleSelect = document.createElement("select");
   [
     { value: "daily", label: "Каждый день" },
@@ -1401,23 +1677,105 @@ function openHabitEditor(habit, card) {
     if (value === habit.schedule_type) option.selected = true;
     scheduleSelect.appendChild(option);
   });
+
   const activeToggle = document.createElement("input");
   activeToggle.type = "checkbox";
   activeToggle.checked = habit.is_active;
+
   const categorySelect = document.createElement("select");
   setupCategorySelect(categorySelect, habit.category_id);
+
   const tagSelect = document.createElement("select");
   tagSelect.multiple = true;
   tagSelect.size = 4;
+  tagSelect.style.display = "none";
   setupTagSelect(tagSelect, habit.tags?.map((t) => t.id) || []);
 
+  const tagChips = document.createElement("div");
+  tagChips.className = "tag-chip-wrap";
+  const tagRow = document.createElement("div");
+  tagRow.className = "chip-row";
+  tagRow.appendChild(tagChips);
+  const tagInput = document.createElement("input");
+  tagInput.type = "text";
+  tagInput.placeholder = "Новый тег";
+  const tagDataList = document.createElement("datalist");
+  const tagDataListId = `tag-options-habit-${habit.id}`;
+  tagDataList.id = tagDataListId;
+  state.tags.forEach((t) => {
+    const opt = document.createElement("option");
+    opt.value = t.name;
+    tagDataList.appendChild(opt);
+  });
+  tagInput.setAttribute("list", tagDataListId);
+  const tagAddBtn = document.createElement("button");
+  tagAddBtn.type = "button";
+  tagAddBtn.className = "ghost-pill";
+  tagAddBtn.textContent = "+";
+  const tagAddWrap = document.createElement("div");
+  tagAddWrap.className = "chip-add";
+  tagAddWrap.append(tagInput, tagAddBtn, tagDataList);
+
+  const renderTagChips = () => {
+    tagChips.innerHTML = "";
+    const selectedIds = readSelectedValues(tagSelect);
+    if (!selectedIds.length) {
+      tagChips.innerHTML = '<span class="muted">Теги не выбраны</span>';
+      return;
+    }
+    selectedIds.forEach((id) => {
+      const tag = state.tags.find((t) => t.id === id);
+      const chip = createTagChip(`#${tag?.name || id}`, true, () => {
+        Array.from(tagSelect.options).forEach((opt) => {
+          if (Number(opt.value) === id) opt.selected = false;
+        });
+        renderTagChips();
+      });
+      tagChips.appendChild(chip);
+    });
+  };
+
+  tagSelect.addEventListener("change", renderTagChips);
+  renderTagChips();
+
+  tagAddBtn.onclick = async (event) => {
+    event.preventDefault();
+    const name = (tagInput.value || "").trim();
+    if (!name) return;
+    let tag = state.tags.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (!tag) {
+      try {
+        tag = await apiFetch("/tags", { method: "POST", body: JSON.stringify({ name }) });
+        if (tag) {
+          state.tags.push(tag);
+          renderTaxonomy();
+        }
+      } catch (error) {
+        setStatus(error.message, "error");
+        return;
+      }
+    }
+    Array.from(tagSelect.options).forEach((opt) => {
+      if (Number(opt.value) === tag.id) opt.selected = true;
+    });
+    tagInput.value = "";
+    renderTagChips();
+  };
+
   form.append(
+    labelWrap("Эмоджи", emojiInput),
     labelWrap("Название", nameInput),
     labelWrap("Описание", descInput),
     labelWrap("Расписание", scheduleSelect),
     labelWrap("Активна", activeToggle),
     labelWrap("Категория", categorySelect),
-    labelWrap("Теги", tagSelect)
+    labelWrap("Теги", tagSelect),
+    (() => {
+      const wrap = document.createElement("div");
+      wrap.className = "chip-input";
+      wrap.append(tagRow, tagAddWrap);
+      return wrap;
+    })()
   );
 
   const actions = document.createElement("div");
@@ -1429,12 +1787,17 @@ function openHabitEditor(habit, card) {
   cancelBtn.type = "button";
   cancelBtn.className = "ghost-btn";
   cancelBtn.textContent = "Отмена";
-  cancelBtn.onclick = () => form.remove();
+  cancelBtn.onclick = () => {
+    card.classList.remove("editing");
+    form.remove();
+  };
   actions.append(saveBtn, cancelBtn);
   form.append(actions);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const emojiValue = (emojiInput.value || "").trim() || "🌀";
+    setEmoji("habits", habit.id, emojiValue);
     const payload = {
       name: nameInput.value,
       description: descInput.value,
@@ -1444,6 +1807,7 @@ function openHabitEditor(habit, card) {
       tag_ids: readSelectedValues(tagSelect),
     };
     await saveHabitEdit(habit.id, payload, form);
+    card.classList.remove("editing");
   });
   const container = card.querySelector(".card-body") || card;
   container.appendChild(form);
@@ -1527,18 +1891,77 @@ function renderReminders(reminders) {
     return;
   }
   reminders.forEach((reminder) => {
-    const card = document.createElement("article");
-    card.className = "card entry";
-    const dateStr = reminder.trigger_time ? new Date(reminder.trigger_time).toLocaleString("ru-RU") : "-";
+    const trigger = reminder.trigger_time ? new Date(reminder.trigger_time) : null;
+    const dateLabel = trigger ? trigger.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }) : "Без даты";
+    const timeLabel = trigger ? trigger.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "--:--";
     const typeLabel = reminderTypeLabel(reminder.type);
-    card.innerHTML = `<strong>${typeLabel}</strong><p class="muted">${reminder.behavior_rule || ""}</p><p>Когда: ${dateStr}</p>`;
+    const statusKey = reminder.is_active === false ? "snoozed" : "pending";
+    const statusLabel = statusKey === "snoozed" ? "Отложено" : "Запланировано";
+    const emoji = reminder.emoji || "🔔";
+
+    const card = document.createElement("article");
+    card.className = "card entry neo-card reminder-card";
+
+    const header = document.createElement("div");
+    header.className = "reminder-head";
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "reminder-title-block";
+    titleWrap.innerHTML = `
+      <div class="reminder-emoji">${emoji}</div>
+      <div class="reminder-title-text">
+        <div class="reminder-title">${reminder.behavior_rule || "Напоминание"}</div>
+        <p class="muted entry-description">${typeLabel}</p>
+      </div>
+    `;
+    const statusEl = document.createElement("span");
+    statusEl.className = `status-pill ${statusPillClass(statusKey)}`;
+    statusEl.textContent = statusLabel;
+    header.append(titleWrap, statusEl);
+
+    const body = document.createElement("div");
+    body.className = "card-body reminder-body";
+
+    const metaGrid = document.createElement("div");
+    metaGrid.className = "meta-grid";
+    metaGrid.append(createMetaChip("📅", "Дата", dateLabel), createMetaChip("⏰", "Время", timeLabel));
+
+    const detailsWrap = document.createElement("div");
+    detailsWrap.className = "reminder-details";
+    detailsWrap.append(metaGrid);
+
     const actions = document.createElement("div");
-    actions.className = "actions";
+    actions.className = "action-row";
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "btn-soft";
+    editBtn.textContent = "✏ Редактировать";
+    editBtn.onclick = () => openReminderEditor(reminder, card);
+    const collapseBtn = document.createElement("button");
+    collapseBtn.type = "button";
+    collapseBtn.className = "btn-soft ghost";
+    collapseBtn.textContent = "Свернуть";
     const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "Удалить";
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn-danger";
+    deleteBtn.textContent = "🗑 Удалить";
     deleteBtn.onclick = () => deleteReminder(reminder.id);
-    actions.appendChild(deleteBtn);
-    card.appendChild(actions);
+    actions.append(editBtn, collapseBtn, deleteBtn);
+
+    let collapsed = false;
+    const applyCollapsed = () => {
+      detailsWrap.hidden = collapsed;
+      statusEl.hidden = collapsed;
+      collapseBtn.textContent = collapsed ? "Развернуть" : "Свернуть";
+      card.classList.toggle("collapsed", collapsed);
+    };
+    collapseBtn.onclick = () => {
+      collapsed = !collapsed;
+      applyCollapsed();
+    };
+    applyCollapsed();
+
+    body.append(detailsWrap, actions);
+    card.append(header, body);
     remindersList.appendChild(card);
   });
 }
@@ -1550,6 +1973,76 @@ async function deleteReminder(id) {
   } catch (error) {
     setStatus(error.message, "error");
   }
+}
+
+function openReminderEditor(reminder, card) {
+  card.querySelectorAll(".inline-editor").forEach((el) => el.remove());
+  card.classList.add("editing");
+  const { date, time } = splitDateTimeParts(reminder.trigger_time);
+  const form = document.createElement("form");
+  form.className = "inline-editor neo-editor";
+
+  const titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.value = reminder.behavior_rule || "";
+
+  const dateInput = document.createElement("input");
+  dateInput.type = "date";
+  dateInput.value = date || "";
+
+  const timeInput = document.createElement("input");
+  timeInput.type = "time";
+  timeInput.value = time || "09:00";
+
+  const activeToggle = document.createElement("input");
+  activeToggle.type = "checkbox";
+  activeToggle.checked = reminder.is_active ?? true;
+
+  form.append(
+    labelWrap("Текст напоминания", titleInput),
+    labelWrap("Дата", dateInput),
+    labelWrap("Время", timeInput),
+    labelWrap("Активно", activeToggle)
+  );
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.textContent = "Сохранить";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "ghost-btn";
+  cancelBtn.textContent = "Отмена";
+  cancelBtn.onclick = () => {
+    card.classList.remove("editing");
+    form.remove();
+  };
+  actions.append(saveBtn, cancelBtn);
+  form.append(actions);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const payload = {
+      behavior_rule: titleInput.value,
+      trigger_time: isoFromDateTime(dateInput.value, timeInput.value),
+      trigger_timezone: state.userTimezone || "UTC",
+      type: reminder.type || "time",
+      is_active: !!activeToggle.checked,
+    };
+    try {
+      await apiFetch(`/reminders/${reminder.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      setStatus("Напоминание обновлено", "success");
+      form.remove();
+      card.classList.remove("editing");
+      await loadReminders();
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  const container = card.querySelector(".card-body") || card;
+  container.appendChild(form);
 }
 
 async function handleAssistant(event) {
