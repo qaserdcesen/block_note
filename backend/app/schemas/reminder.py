@@ -18,6 +18,7 @@ class ReminderBase(BaseModel):
     trigger_weather_condition: Optional[str] = None
     behavior_rule: Optional[str] = None
     is_active: bool = True
+    pinned: bool = False
 
 
 class ReminderCreate(ReminderBase):
@@ -36,11 +37,13 @@ class ReminderUpdate(BaseModel):
     trigger_weather_condition: Optional[str] = None
     behavior_rule: Optional[str] = None
     is_active: Optional[bool] = None
+    pinned: Optional[bool] = None
 
 
 class ReminderRead(ReminderBase):
     id: int
     user_id: int
+    pinned: bool = False
     last_checked_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime

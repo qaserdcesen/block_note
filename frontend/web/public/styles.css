@@ -199,6 +199,35 @@ body.theme-dark {
   overflow: hidden;
 }
 
+.pin-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.8);
+  color: #9ca3af;
+  font-size: 18px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pin-btn:hover {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+.pin-btn.pinned {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
 .card::after {
   content: "";
   position: absolute;

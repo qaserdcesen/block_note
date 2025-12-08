@@ -35,10 +35,13 @@ def init_db() -> None:
     # Lightweight migrations for SQLite/initial runs.
     _ensure_column("tasks", "completion_mode", "completion_mode VARCHAR(20) NOT NULL DEFAULT 'percent'")
     _ensure_column("tasks", "completion_value", "completion_value INTEGER NOT NULL DEFAULT 0")
+    _ensure_column("tasks", "pinned", "pinned BOOLEAN NOT NULL DEFAULT 0")
     _ensure_column("tasks", "category_id", "category_id INTEGER REFERENCES categories(id)")
     _ensure_column("habits", "completion_mode", "completion_mode VARCHAR(20) NOT NULL DEFAULT 'percent'")
     _ensure_column("habits", "completion_value", "completion_value INTEGER NOT NULL DEFAULT 0")
+    _ensure_column("habits", "pinned", "pinned BOOLEAN NOT NULL DEFAULT 0")
     _ensure_column("habits", "category_id", "category_id INTEGER REFERENCES categories(id)")
+    _ensure_column("reminders", "pinned", "pinned BOOLEAN NOT NULL DEFAULT 0")
     _ensure_column("users", "telegram_id", "telegram_id BIGINT UNIQUE")
     _ensure_column("users", "telegram_username", "telegram_username VARCHAR(64)")
     _ensure_column("users", "first_day_of_week", "first_day_of_week VARCHAR(16) NOT NULL DEFAULT 'monday'")

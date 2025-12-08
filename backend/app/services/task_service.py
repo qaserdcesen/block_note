@@ -31,14 +31,25 @@ def list_tasks(
     if tag_id is not None:
         stmt = stmt.join(Task.tags).where(Tag.id == tag_id)
 
-    stmt = stmt.order_by(Task.due_datetime.desc(), Task.priority.desc(), Task.id.desc()).distinct()
+    stmt = stmt.order_by(Task.pinned.desc(), Task.due_datetime.desc(), Task.priority.desc(), Task.id.desc()).distinct()
     return list(db.execute(stmt).scalars().all())
 
 
-def _normalize_completion(payload: dict[str, Any], fallback_mode: CompletionMode | None = None) -> None:
+def _normalize_completion(
+    payload: dict[str, Any],
+    fallback_mode: CompletionMode | None = None,
+    current_value: int | None = None,
+) -> None:
+    has_completion_change = {"completion_mode", "completion_value", "status"}.intersection(payload.keys())
+    if not has_completion_change:
+        return
+
     mode = payload.get("completion_mode") or fallback_mode or CompletionMode.PERCENT
     payload["completion_mode"] = mode
-    raw_value = payload.get("completion_value", 0)
+
+    raw_value = payload.get("completion_value")
+    if raw_value is None:
+        raw_value = current_value if current_value is not None else 0
     value = max(0, min(100, int(raw_value)))
 
     if payload.get("status") == TaskStatus.DONE:
@@ -47,8 +58,10 @@ def _normalize_completion(payload: dict[str, Any], fallback_mode: CompletionMode
         value = 0
 
     payload["completion_value"] = value
-    if "status" not in payload:
-        payload["status"] = TaskStatus.DONE if value >= 100 else TaskStatus.IN_PROGRESS if value > 0 else TaskStatus.PENDING
+    if "status" not in payload and "completion_value" in payload:
+        payload["status"] = (
+            TaskStatus.DONE if value >= 100 else TaskStatus.IN_PROGRESS if value > 0 else TaskStatus.PENDING
+        )
 
 
 def _load_category(db: Session, user_id: int, category_id: int | None) -> Category | None:
@@ -66,7 +79,7 @@ def create_task(db: Session, data: TaskCreate) -> Task:
     payload = data.model_dump()
     tag_ids = payload.pop("tag_ids", [])
     category_id = payload.pop("category_id", None)
-    _normalize_completion(payload)
+    _normalize_completion(payload, current_value=0)
 
     task = Task(**payload)
     task.category = _load_category(db, user_id=task.user_id, category_id=category_id)
@@ -86,7 +99,7 @@ def update_task(db: Session, task_id: int, user_id: int, data: TaskUpdate) -> Ta
     payload = data.model_dump(exclude_unset=True)
     tag_ids = payload.pop("tag_ids", None)
     category_id = payload.pop("category_id", None)
-    _normalize_completion(payload, fallback_mode=task.completion_mode)
+    _normalize_completion(payload, fallback_mode=task.completion_mode, current_value=task.completion_value)
     for key, value in payload.items():
         setattr(task, key, value)
 

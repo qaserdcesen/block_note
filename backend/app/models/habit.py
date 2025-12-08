@@ -39,6 +39,7 @@ class Habit(Base):
         SAEnum(HabitCompletionMode), default=HabitCompletionMode.PERCENT, nullable=False
     )
     completion_value: Mapped[int] = mapped_column(Integer, default=0)
+    pinned: Mapped[bool] = mapped_column(default=False)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -13,7 +13,7 @@ def list_reminders(db: Session, user_id: int) -> list[Reminder]:
         select(Reminder)
         .where(Reminder.user_id == user_id)
         .where(Reminder.is_active.is_(True))
-        .order_by(Reminder.created_at.desc())
+        .order_by(Reminder.pinned.desc(), Reminder.created_at.desc())
     )
     return list(db.execute(stmt).scalars().all())
 

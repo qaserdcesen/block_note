@@ -16,6 +16,7 @@ class HabitBase(BaseModel):
     is_active: bool = True
     completion_mode: HabitCompletionMode = HabitCompletionMode.PERCENT
     completion_value: int = Field(0, ge=0, le=100)
+    pinned: bool = False
 
 
 class HabitCreate(HabitBase):
@@ -34,6 +35,7 @@ class HabitUpdate(BaseModel):
     completion_value: Optional[int] = Field(None, ge=0, le=100)
     category_id: Optional[int] = None
     tag_ids: Optional[list[int]] = None
+    pinned: Optional[bool] = None
 
 
 class HabitRead(HabitBase):
@@ -42,6 +44,7 @@ class HabitRead(HabitBase):
     category_id: int | None = None
     category: CategoryRead | None = None
     tags: list[TagRead] = Field(default_factory=list)
+    pinned: bool = False
     created_at: datetime
     updated_at: datetime
 

@@ -30,6 +30,7 @@ const state = {
   habitStatuses: {},
   tasks: [],
   habits: [],
+  reminders: [],
   categories: [],
   tags: [],
   emojis: loadEmojiStore(),
@@ -981,7 +982,7 @@ function renderTasks(tasks) {
   const filtered = tasks.filter((task) =>
     matchesSearch([task.title, task.category?.name, ...(task.tags?.map((t) => t.name) || [])], search),
   );
-  const sorted = sortTasks(filtered, sortKey);
+  const sorted = prioritizePinned(sortTasks(filtered, sortKey));
   tasksList.innerHTML = "";
   if (!sorted.length) {
     const message = tasks.length ? "Ничего не найдено по текущему поиску или сортировке" : "Задач пока нет";
@@ -1004,6 +1005,8 @@ function renderTasks(tasks) {
 
     const card = document.createElement("article");
     card.className = "card entry neo-card task-card";
+    const pinBtn = createPinButton(!!task.pinned, () => togglePinned("task", task.id, !task.pinned));
+    card.appendChild(pinBtn);
 
     const header = document.createElement("div");
     header.className = "task-head";
@@ -1445,7 +1448,7 @@ function renderHabits(habits) {
   const filtered = habits.filter((habit) =>
     matchesSearch([habit.name, habit.category?.name, ...(habit.tags?.map((t) => t.name) || [])], search),
   );
-  const sorted = sortHabits(filtered, sortKey);
+  const sorted = prioritizePinned(sortHabits(filtered, sortKey));
   habitsList.innerHTML = "";
   if (!sorted.length) {
     const message = habits.length ? "Ничего не найдено по текущему поиску или сортировке" : "Привычек пока нет";
@@ -1463,6 +1466,8 @@ function renderHabits(habits) {
 
     const card = document.createElement("article");
     card.className = "card entry neo-card habit-card";
+    const pinBtn = createPinButton(!!habit.pinned, () => togglePinned("habit", habit.id, !habit.pinned));
+    card.appendChild(pinBtn);
 
     const header = document.createElement("div");
     header.className = "habit-head";
@@ -1606,6 +1611,45 @@ function matchesSearch(parts, search) {
   if (!search) return true;
   const haystack = parts.filter(Boolean).join(" ").toLowerCase();
   return haystack.includes(search);
+}
+
+function prioritizePinned(list) {
+  const pinned = [];
+  const regular = [];
+  list.forEach((item) => ((item?.pinned ? pinned : regular).push(item)));
+  return [...pinned, ...regular];
+}
+
+function createPinButton(isPinned, onToggle) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = `pin-btn ${isPinned ? "pinned" : ""}`;
+  btn.innerHTML = isPinned ? "&#9733;" : "&#9734;";
+  btn.title = isPinned ? "Открепить" : "Закрепить";
+  btn.onclick = (event) => {
+    event.stopPropagation();
+    onToggle?.();
+  };
+  return btn;
+}
+
+async function togglePinned(kind, id, pinned) {
+  const endpoints = {
+    task: `/tasks/${id}`,
+    habit: `/habits/${id}`,
+    reminder: `/reminders/${id}`,
+  };
+  const path = endpoints[kind];
+  if (!path) return;
+  try {
+    await apiFetch(path, { method: "PATCH", body: JSON.stringify({ pinned }) });
+    if (kind === "task") await loadTasks();
+    else if (kind === "habit") await loadHabits();
+    else if (kind === "reminder") await loadReminders();
+    setStatus(pinned ? "Закреплено" : "Откреплено", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
 }
 
 function sortTasks(list, sortKey) {
@@ -1886,8 +1930,10 @@ async function handleCreateReminder(event) {
 async function loadReminders() {
   try {
     const reminders = await apiFetch("/reminders");
-    renderReminders(reminders || []);
+    state.reminders = reminders || [];
+    renderReminders(state.reminders);
   } catch (error) {
+    state.reminders = [];
     renderReminders([]);
     setStatus(error.message, "error");
   }
@@ -1900,11 +1946,12 @@ function reminderTypeLabel(type) {
 
 function renderReminders(reminders) {
   remindersList.innerHTML = "";
-  if (!reminders.length) {
+  const ordered = prioritizePinned(reminders.slice());
+  if (!ordered.length) {
     remindersList.innerHTML = '<p class="muted">Напоминаний пока нет</p>';
     return;
   }
-  reminders.forEach((reminder) => {
+  ordered.forEach((reminder) => {
     const trigger = reminder.trigger_time ? new Date(reminder.trigger_time) : null;
     const dateLabel = trigger ? trigger.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }) : "Без даты";
     const timeLabel = trigger ? trigger.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "--:--";
@@ -1915,6 +1962,8 @@ function renderReminders(reminders) {
 
     const card = document.createElement("article");
     card.className = "card entry neo-card reminder-card";
+    const pinBtn = createPinButton(!!reminder.pinned, () => togglePinned("reminder", reminder.id, !reminder.pinned));
+    card.appendChild(pinBtn);
 
     const header = document.createElement("div");
     header.className = "reminder-head";

@@ -31,6 +31,7 @@ class Reminder(Base):
     trigger_weather_condition: Mapped[Optional[str]] = mapped_column(String(64))
     behavior_rule: Mapped[Optional[str]] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)
     last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
