@@ -210,6 +210,17 @@ function switchPage(targetId) {
   if (targetId === "assistant-page") {
     loadAssistantHistory();
   }
+  if (targetId === "tasks-page") {
+    loadTaxonomy();
+    loadTasks();
+  }
+  if (targetId === "habits-page") {
+    loadTaxonomy();
+    loadHabits();
+  }
+  if (targetId === "reminders-page") {
+    loadReminders();
+  }
   closeCreationMenu();
   updateUserMeta();
 }
