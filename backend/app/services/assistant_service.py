@@ -55,6 +55,7 @@ def _load_recent_messages(db: Session, user_id: int, limit: int = 10) -> List[Me
     stmt = (
         select(Message)
         .where(Message.user_id == user_id)
+        .where(Message.role.in_([MessageRole.USER, MessageRole.ASSISTANT]))
         .order_by(Message.created_at.desc())
         .limit(limit)
     )
@@ -66,14 +67,7 @@ def _get_or_create_category(db: Session, user: User, name: str) -> tuple[Categor
     normalized = " ".join(name.strip().split())
     if not normalized:
         raise ValueError("Empty category name")
-    existing = (
-        db.execute(
-            select(Category)
-            .where(Category.user_id == user.id)
-            .where(func.lower(func.trim(Category.name)) == normalized.lower())
-        )
-        .scalar_one_or_none()
-    )
+    existing = category_service.find_by_normalized_name(db, user.id, normalized)
     if existing:
         return existing, False
     try:
@@ -81,13 +75,7 @@ def _get_or_create_category(db: Session, user: User, name: str) -> tuple[Categor
         return category, True
     except IntegrityError:
         db.rollback()
-        existing = (
-            db.execute(
-                select(Category)
-                .where(Category.user_id == user.id)
-                .where(func.lower(func.trim(Category.name)) == normalized.lower())
-            ).scalar_one_or_none()
-        )
+        existing = category_service.find_by_normalized_name(db, user.id, normalized)
         if existing:
             return existing, False
         raise
@@ -468,3 +456,17 @@ def process_message(db: Session, user_id: int, user_message: str) -> str:
 
     _log_message(db, user_id, MessageRole.ASSISTANT, reply_text)
     return reply_text
+
+
+def list_messages(db: Session, user_id: int, limit: int = 50) -> List[Message]:
+    safe_limit = max(1, min(limit, 100))
+    stmt = (
+        select(Message)
+        .where(Message.user_id == user_id)
+        .where(Message.role.in_([MessageRole.USER, MessageRole.ASSISTANT]))
+        .order_by(Message.created_at.desc())
+        .limit(safe_limit)
+    )
+    items = list(db.execute(stmt).scalars().all())
+    # Return in chronological order for UI rendering.
+    return list(reversed(items))

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.assistant import AssistantMessage, AssistantResponse
+from app.schemas.assistant import AssistantMessage, AssistantResponse, MessageRead
 from app.services import assistant_service
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
@@ -18,4 +18,13 @@ def send_message(
 ):
     reply = assistant_service.process_message(db, current_user.id, payload.user_message)
     return AssistantResponse(reply=reply)
+
+
+@router.get("/history", response_model=list[MessageRead])
+def get_history(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return assistant_service.list_messages(db, current_user.id, limit=limit)
 

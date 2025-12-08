@@ -207,6 +207,9 @@ function switchPage(targetId) {
     loadProfile();
     loadGoals();
   }
+  if (targetId === "assistant-page") {
+    loadAssistantHistory();
+  }
   closeCreationMenu();
   updateUserMeta();
 }
@@ -2045,6 +2048,20 @@ function openReminderEditor(reminder, card) {
   container.appendChild(form);
 }
 
+async function loadAssistantHistory(limit = 50) {
+  try {
+    const history = await apiFetch(`/assistant/history?limit=${encodeURIComponent(limit)}`);
+    state.assistantHistory = Array.isArray(history) ? history : [];
+    renderAssistantHistory();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function refreshAfterAssistantActions() {
+  await Promise.all([loadTasks(), loadHabits(), loadReminders(), loadTaxonomy()]);
+}
+
 async function handleAssistant(event) {
   event.preventDefault();
   const messageInput = el("assistant-message");
@@ -2052,31 +2069,33 @@ async function handleAssistant(event) {
   if (!message) return;
   messageInput.value = "";
   try {
-    const response = await apiFetch("/assistant/message", { method: "POST", body: JSON.stringify({ user_message: message }) });
-    state.assistantHistory.push({ user: message, reply: response.reply, ts: new Date().toISOString() });
+    // Optimistic render so the user sees their message immediately.
+    const now = new Date().toISOString();
+    state.assistantHistory.push({ role: "user", content: message, created_at: now });
     renderAssistantHistory();
+
+    await apiFetch("/assistant/message", { method: "POST", body: JSON.stringify({ user_message: message }) });
+    await loadAssistantHistory();
+    await refreshAfterAssistantActions();
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
 
 function renderAssistantHistory() {
+  if (!assistantHistoryEl) return;
   assistantHistoryEl.innerHTML = "";
   if (!state.assistantHistory.length) {
     assistantHistoryEl.innerHTML = '<p class="muted">История пока пустая</p>';
     return;
   }
   state.assistantHistory.forEach((item) => {
-    const userBubble = document.createElement("div");
-    userBubble.className = "assistant-bubble user";
-    userBubble.innerHTML = `<div>${item.user}</div><span class="assistant-meta">${new Date(item.ts).toLocaleTimeString("ru-RU")}</span>`;
-
-    const botBubble = document.createElement("div");
-    botBubble.className = "assistant-bubble assistant";
-    botBubble.innerHTML = `<div>${item.reply}</div><span class="assistant-meta">${new Date(item.ts).toLocaleTimeString("ru-RU")}</span>`;
-
-    assistantHistoryEl.appendChild(userBubble);
-    assistantHistoryEl.appendChild(botBubble);
+    const isUser = (item.role || "").toLowerCase() === "user";
+    const ts = item.created_at ? new Date(item.created_at) : new Date();
+    const bubble = document.createElement("div");
+    bubble.className = `assistant-bubble ${isUser ? "user" : "assistant"}`;
+    bubble.innerHTML = `<div>${item.content}</div><span class="assistant-meta">${ts.toLocaleTimeString("ru-RU")}</span>`;
+    assistantHistoryEl.appendChild(bubble);
   });
   assistantHistoryEl.scrollTop = assistantHistoryEl.scrollHeight;
 }
@@ -2087,5 +2106,5 @@ async function apiFetch(path, options = {}) {
 
 async function refreshAll() {
   await loadTaxonomy();
-  await Promise.all([loadTasks(), loadHabits(), loadReminders(), loadProfile(), loadGoals()]);
+  await Promise.all([loadTasks(), loadHabits(), loadReminders(), loadProfile(), loadGoals(), loadAssistantHistory()]);
 }

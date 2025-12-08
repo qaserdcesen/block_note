@@ -1,10 +1,34 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
 from app.schemas.category import CategoryCreate, CategoryUpdate
+
+
+def _normalize_key(name: str) -> str:
+    """Trim, collapse spaces and casefold name for reliable comparisons."""
+    return " ".join(name.strip().split()).casefold()
+
+
+def _clean_name(name: str) -> str:
+    """Normalize whitespace but preserve original casing for storage."""
+    return " ".join(name.strip().split())
+
+
+def find_by_normalized_name(db: Session, user_id: int, raw_name: str) -> Category | None:
+    """
+    Locate a category for the user using Unicode-safe case-insensitive comparison.
+
+    SQLite LOWER/UPPER are ASCII-only, so we casefold in Python instead of SQL.
+    """
+    target_key = _normalize_key(raw_name)
+    stmt = select(Category).where(Category.user_id == user_id)
+    for category in db.execute(stmt).scalars().all():
+        if _normalize_key(category.name) == target_key:
+            return category
+    return None
 
 
 def list_categories(db: Session, user_id: int) -> list[Category]:
@@ -15,16 +39,9 @@ def list_categories(db: Session, user_id: int) -> list[Category]:
 def create_category(db: Session, data: CategoryCreate) -> Category:
     if data.user_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required")
-    normalized = data.name.strip()
-    # Defensive deduplication by trimmed lower name.
-    existing = (
-        db.execute(
-            select(Category)
-            .where(Category.user_id == data.user_id)
-            .where(func.lower(func.trim(Category.name)) == normalized.lower())
-        )
-        .scalar_one_or_none()
-    )
+    normalized = _clean_name(data.name)
+    # Defensive deduplication using Unicode-aware casefolding.
+    existing = find_by_normalized_name(db, data.user_id, normalized)
     if existing:
         return existing
     try:
@@ -35,14 +52,7 @@ def create_category(db: Session, data: CategoryCreate) -> Category:
         return category
     except IntegrityError:
         db.rollback()
-        existing = (
-            db.execute(
-                select(Category)
-                .where(Category.user_id == data.user_id)
-                .where(func.lower(func.trim(Category.name)) == normalized.lower())
-            )
-            .scalar_one_or_none()
-        )
+        existing = find_by_normalized_name(db, data.user_id, normalized)
         if existing:
             return existing
         raise
