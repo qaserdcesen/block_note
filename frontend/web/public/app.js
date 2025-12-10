@@ -142,6 +142,17 @@ const setEmoji = (type, id, value) => {
 
 const emojiFor = (type, id, fallback) => (state.emojis?.[type]?.[id] || fallback || "").trim() || fallback;
 
+const sliderColors = { accent: "#6b8bff", accentAlt: "#9c7cff" };
+
+const applySliderFill = (sliderEl) => {
+  if (!sliderEl) return;
+  const value = clamp(Number(sliderEl.value) || 0, 0, 100);
+  const filled = Math.min(100, Math.max(0, value));
+  sliderEl.style.setProperty("--fill", `${filled}%`);
+  sliderEl.style.setProperty("--fill-color-start", sliderColors.accent);
+  sliderEl.style.setProperty("--fill-color-end", sliderColors.accentAlt);
+};
+
 const formatUsername = (username) => {
   if (!username) return "";
   return username.startsWith("@") ? username : `@${username}`;
@@ -1059,13 +1070,6 @@ function renderTasks(tasks) {
 
     const progressStack = document.createElement("div");
     progressStack.className = "progress-stack";
-    const progressLine = document.createElement("div");
-    progressLine.className = "progress-line";
-    const progressFill = document.createElement("div");
-    progressFill.className = "progress-line__fill";
-    progressFill.style.width = `${progressValue}%`;
-    progressLine.appendChild(progressFill);
-
     const progressSlider = document.createElement("input");
     progressSlider.type = "range";
     progressSlider.min = 0;
@@ -1073,25 +1077,26 @@ function renderTasks(tasks) {
     progressSlider.step = 5;
     progressSlider.value = progressValue;
     progressSlider.className = "progress-slider";
+    applySliderFill(progressSlider);
     const progressPercent = document.createElement("span");
     progressPercent.className = "progress-percent";
     progressPercent.textContent = `${progressValue}%`;
     progressSlider.addEventListener("input", () => {
       const normalized = normalizeCompletionValue(progressSlider.value);
       progressSlider.value = normalized;
-      progressFill.style.width = `${normalized}%`;
       progressPercent.textContent = `${normalized}%`;
+      applySliderFill(progressSlider);
     });
     progressSlider.addEventListener("change", () => updateTaskCompletion(task.id, progressSlider.value));
     doneBtn.onclick = () => {
       const current = normalizeCompletionValue(progressSlider.value);
       const next = current >= 100 ? 0 : 100;
       progressSlider.value = next;
-      progressFill.style.width = `${next}%`;
       progressPercent.textContent = `${next}%`;
+      applySliderFill(progressSlider);
       updateTaskCompletion(task.id, next);
     };
-    progressStack.append(progressLine, progressSlider);
+    progressStack.append(progressSlider);
     progressWrap.append(doneBtn, progressStack, progressPercent);
 
     const detailsWrap = document.createElement("div");
@@ -1519,13 +1524,6 @@ function renderHabits(habits) {
 
     const progressStack = document.createElement("div");
     progressStack.className = "progress-stack";
-    const progressLine = document.createElement("div");
-    progressLine.className = "progress-line";
-    const progressFill = document.createElement("div");
-    progressFill.className = "progress-line__fill";
-    progressFill.style.width = `${progressValue}%`;
-    progressLine.appendChild(progressFill);
-
     const progressSlider = document.createElement("input");
     progressSlider.type = "range";
     progressSlider.min = 0;
@@ -1533,25 +1531,26 @@ function renderHabits(habits) {
     progressSlider.step = 5;
     progressSlider.value = progressValue;
     progressSlider.className = "progress-slider";
+    applySliderFill(progressSlider);
     const progressPercent = document.createElement("span");
     progressPercent.className = "progress-percent";
     progressPercent.textContent = `${progressValue}%`;
     progressSlider.addEventListener("input", () => {
       const normalized = normalizeCompletionValue(progressSlider.value);
       progressSlider.value = normalized;
-      progressFill.style.width = `${normalized}%`;
       progressPercent.textContent = `${normalized}%`;
+      applySliderFill(progressSlider);
     });
     progressSlider.addEventListener("change", () => updateHabitCompletion(habit.id, progressSlider.value));
     doneBtn.onclick = () => {
       const current = normalizeCompletionValue(progressSlider.value);
       const next = current >= 100 ? 0 : 100;
       progressSlider.value = next;
-      progressFill.style.width = `${next}%`;
       progressPercent.textContent = `${next}%`;
+      applySliderFill(progressSlider);
       updateHabitCompletion(habit.id, next);
     };
-    progressStack.append(progressLine, progressSlider);
+    progressStack.append(progressSlider);
     progressWrap.append(doneBtn, progressStack, progressPercent);
 
     const detailsWrap = document.createElement("div");

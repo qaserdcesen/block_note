@@ -491,6 +491,32 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.card-header button:not(.status-pill):not(.btn-soft):not(.btn-danger):not(.ghost-pill) {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+}
+
+.pin-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.84));
+  color: #8b94a8;
+  line-height: 1;
+}
+
+.pin-btn.pinned {
+  color: #f8c952;
+}
+
 .card-body {
   display: grid;
   gap: 8px;
@@ -703,6 +729,7 @@ p {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 12px;
+  padding-right: 50px; /* резерв под иконку избранного в правом углу */
 }
 
 .task-title-block,
@@ -738,6 +765,7 @@ p {
 
 .entry-description {
   margin-top: 4px;
+  margin-bottom: 8px;
   line-height: 1.5;
 }
 
@@ -752,6 +780,7 @@ p {
   letter-spacing: -0.01em;
   white-space: nowrap;
   justify-self: end;
+  margin-right: 0px; /* отступ от избранного */
 }
 
 .status-pending {
@@ -784,6 +813,7 @@ p {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 10px;
+  margin-top: 10px;
 }
 
 .meta-chip {
@@ -895,7 +925,44 @@ p {
 
 .progress-slider {
   width: 100%;
-  accent-color: var(--accent);
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  background-color: rgba(255, 255, 255, 0.08);
+  background-image: linear-gradient(90deg, #6b8bff 0%, #9c7cff 100%);
+  background-repeat: no-repeat;
+  background-size: calc(var(--fill, 0%) + 12px) 100%;
+  background-position: left center;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.progress-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.progress-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.progress-slider::-moz-range-track {
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #9c7cff);
 }
 
 .progress-percent {
