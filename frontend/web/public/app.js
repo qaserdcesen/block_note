@@ -39,6 +39,8 @@ const state = {
     taskSort: "date_desc",
     habitSearch: "",
     habitSort: "name_asc",
+    taskTagFilter: [],
+    habitTagFilter: [],
   },
   userTimezone: initialTimezone,
   telegramUser: tg?.initDataUnsafe?.user || null,
@@ -82,6 +84,8 @@ const taskSearchInput = el("task-search");
 const taskSortSelect = el("task-sort");
 const habitSearchInput = el("habit-search");
 const habitSortSelect = el("habit-sort");
+let taskFilterTagsSelect = el("task-filter-tags");
+let habitFilterTagsSelect = el("habit-filter-tags");
 const navProfileBtn = el("nav-profile");
 const navCreateBtn = el("nav-create");
 const navAssistantBtn = el("nav-assistant");
@@ -158,12 +162,63 @@ const formatUsername = (username) => {
   return username.startsWith("@") ? username : `@${username}`;
 };
 
+const elevateFilters = () => {
+  const moveFilters = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    if (!section || !section.parentNode) return;
+    const filters = section.querySelector(".filters-row");
+    if (!filters) return;
+    const ensureTagFilter = (filtersEl, selectId) => {
+      let select = document.getElementById(selectId);
+      if (!select) {
+        const label = document.createElement("label");
+        label.className = "inline-input";
+        label.textContent = "Фильтр по тегам";
+        select = document.createElement("select");
+        select.id = selectId;
+        select.multiple = true;
+        select.size = 6;
+        select.className = "filter-tag-select";
+        label.appendChild(select);
+        filtersEl.appendChild(label);
+      }
+      if (selectId === "task-filter-tags") taskFilterTagsSelect = select;
+      if (selectId === "habit-filter-tags") habitFilterTagsSelect = select;
+    };
+    const markFilterControl = (inputId, className) => {
+      const input = document.getElementById(inputId);
+      const wrap = input?.closest("label");
+      if (wrap) wrap.classList.add(className);
+    };
+    if (sectionId === "tasks-section") {
+      ensureTagFilter(filters, "task-filter-tags");
+      filters.classList.add("filters-row--tasks");
+      markFilterControl("task-search", "filters-search");
+      markFilterControl("task-sort", "filters-sort");
+      markFilterControl("task-filter-tags", "filters-tags");
+    }
+    if (sectionId === "habits-section") {
+      ensureTagFilter(filters, "habit-filter-tags");
+      filters.classList.add("filters-row--top");
+    } else {
+      filters.classList.add("filters-row--top");
+    }
+    const wrapper = document.createElement("article");
+    wrapper.className = "card filters-card";
+    wrapper.appendChild(filters);
+    section.parentNode.insertBefore(wrapper, section);
+  };
+  moveFilters("tasks-section");
+  moveFilters("habits-section");
+};
+
 const today = new Date().toISOString().slice(0, 10);
 if (tasksDateInput) tasksDateInput.value = today;
 if (reminderDate) reminderDate.value = today;
 if (reminderTime) reminderTime.value = "09:00";
 
 initTelegram();
+elevateFilters();
 bindNav();
 bindForms();
 bindFilters();
@@ -332,6 +387,18 @@ function bindFilters() {
     habitSortSelect.value = state.ui.habitSort;
     habitSortSelect.addEventListener("change", () => {
       state.ui.habitSort = habitSortSelect.value;
+      renderHabits(state.habits);
+    });
+  }
+  if (taskFilterTagsSelect) {
+    taskFilterTagsSelect.addEventListener("change", () => {
+      state.ui.taskTagFilter = readSelectedValues(taskFilterTagsSelect);
+      renderTasks(state.tasks);
+    });
+  }
+  if (habitFilterTagsSelect) {
+    habitFilterTagsSelect.addEventListener("change", () => {
+      state.ui.habitTagFilter = readSelectedValues(habitFilterTagsSelect);
       renderHabits(state.habits);
     });
   }
@@ -857,6 +924,8 @@ async function loadTaxonomy() {
     state.tags = tags || [];
     renderTaxonomy();
     syncCreationSelectors();
+    fillFilterTagSelect(taskFilterTagsSelect, state.ui.taskTagFilter);
+    fillFilterTagSelect(habitFilterTagsSelect, state.ui.habitTagFilter);
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -902,6 +971,23 @@ function renderTaxonomy() {
         tagsList.appendChild(item);
       });
     }
+  }
+}
+
+function fillFilterTagSelect(selectEl, selectedIds = []) {
+  if (!selectEl) return;
+  const selectedSet = new Set((selectedIds || []).map((id) => Number(id)));
+  selectEl.innerHTML = "";
+  if (!state.tags.length) {
+    const placeholder = new Option("Тегов нет", "", true, false);
+    placeholder.disabled = true;
+    selectEl.appendChild(placeholder);
+  } else {
+    state.tags.forEach((tag) => {
+      const option = new Option(`#${tag.name}`, tag.id);
+      option.selected = selectedSet.has(Number(tag.id));
+      selectEl.appendChild(option);
+    });
   }
 }
 
@@ -990,9 +1076,14 @@ const createTagChip = (label, removable = false, onRemove = null) => {
 function renderTasks(tasks) {
   const search = (state.ui?.taskSearch || "").toLowerCase();
   const sortKey = state.ui?.taskSort || "priority_desc";
-  const filtered = tasks.filter((task) =>
-    matchesSearch([task.title, task.category?.name, ...(task.tags?.map((t) => t.name) || [])], search),
-  );
+  const tagFilter = (state.ui?.taskTagFilter || []).map((id) => Number(id)).filter(Boolean);
+  const filtered = tasks.filter((task) => {
+    if (tagFilter.length) {
+      const tagIds = new Set((task.tags || []).map((t) => Number(t.id)));
+      if (!tagFilter.every((id) => tagIds.has(id))) return false;
+    }
+    return matchesSearch([task.title, task.category?.name, ...(task.tags?.map((t) => t.name) || [])], search);
+  });
   const sorted = prioritizePinned(sortTasks(filtered, sortKey));
   tasksList.innerHTML = "";
   if (!sorted.length) {
@@ -1450,9 +1541,14 @@ function habitStatusText(habit) {
 function renderHabits(habits) {
   const search = (state.ui?.habitSearch || "").toLowerCase();
   const sortKey = state.ui?.habitSort || "name_asc";
-  const filtered = habits.filter((habit) =>
-    matchesSearch([habit.name, habit.category?.name, ...(habit.tags?.map((t) => t.name) || [])], search),
-  );
+  const tagFilter = (state.ui?.habitTagFilter || []).map((id) => Number(id)).filter(Boolean);
+  const filtered = habits.filter((habit) => {
+    if (tagFilter.length) {
+      const tagIds = new Set((habit.tags || []).map((t) => Number(t.id)));
+      if (!tagFilter.every((id) => tagIds.has(id))) return false;
+    }
+    return matchesSearch([habit.name, habit.category?.name, ...(habit.tags?.map((t) => t.name) || [])], search);
+  });
   const sorted = prioritizePinned(sortHabits(filtered, sortKey));
   habitsList.innerHTML = "";
   if (!sorted.length) {
