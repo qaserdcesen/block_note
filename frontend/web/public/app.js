@@ -25,7 +25,7 @@ const persistEmojis = (store) => {
 };
 
 const state = {
-  currentPage: "tasks-page",
+  currentPage: "home-page",
   assistantHistory: [],
   habitStatuses: {},
   tasks: [],
@@ -41,6 +41,7 @@ const state = {
     habitSort: "name_asc",
     taskTagFilter: [],
     habitTagFilter: [],
+    homeSearch: "",
   },
   userTimezone: initialTimezone,
   telegramUser: tg?.initDataUnsafe?.user || null,
@@ -70,6 +71,9 @@ const timezoneIndicator = el("timezone-indicator");
 const tasksList = el("tasks-list");
 const habitsList = el("habits-list");
 const remindersList = el("reminders-list");
+let homeTasksList = null;
+let homeHabitsList = null;
+let homeRemindersList = null;
 const assistantHistoryEl = el("assistant-history");
 const tasksDateInput = el("tasks-date");
 const reminderDate = el("reminder-date");
@@ -93,7 +97,7 @@ function updateFilterSelectState(selectEl) {
 }
 const navProfileBtn = el("nav-profile");
 const navCreateBtn = el("nav-create");
-const navAssistantBtn = el("nav-assistant");
+const navAssistantBtn = el("nav-assistant"); // будет использоваться как "Главная"
 const creationMenu = el("creation-menu");
 const creationOptions = Array.from(document.querySelectorAll(".creation-option"));
 const creationPages = ["tasks-page", "habits-page", "reminders-page"];
@@ -135,6 +139,7 @@ const personalizationForm = el("profile-personalization-form");
 const assistantForm = el("profile-assistant-form");
 
 const pages = {
+  "home-page": null,
   "tasks-page": el("tasks-page"),
   "habits-page": el("habits-page"),
   "reminders-page": el("reminders-page"),
@@ -217,12 +222,118 @@ const elevateFilters = () => {
   moveFilters("habits-section");
 };
 
+const buildHomePage = () => {
+  const pagesContainer = document.querySelector(".pages");
+  if (!pagesContainer) return;
+  const home = document.createElement("section");
+  home.className = "page";
+  home.id = "home-page";
+  const head = document.createElement("div");
+  head.className = "page-head page-head__compact";
+  head.innerHTML = `
+    <div>
+      <p class="eyebrow">Обзор</p>
+      <h2>Главная</h2>
+      <p class="muted">Все задачи, привычки и напоминания в одном месте, отсортированы по дате.</p>
+    </div>
+    <div class="inline-input">
+      <label for="home-search">Поиск</label>
+      <input type="search" id="home-search" placeholder="Введите название или тег" />
+    </div>
+  `;
+  const grid = document.createElement("div");
+  grid.className = "home-grid";
+  const makeCard = (title, listId) => {
+    const card = document.createElement("article");
+    card.className = "card";
+    const h = document.createElement("header");
+    h.className = "section-head";
+    h.innerHTML = `<h3>${title}</h3>`;
+    const list = document.createElement("div");
+    list.id = listId;
+    list.className = "entries";
+    card.append(h, list);
+    return { card, list };
+  };
+  const tasksCard = makeCard("Задачи", "home-tasks-list");
+  const habitsCard = makeCard("Привычки", "home-habits-list");
+  const remindersCard = makeCard("Напоминания", "home-reminders-list");
+  homeTasksList = tasksCard.list;
+  homeHabitsList = habitsCard.list;
+  homeRemindersList = remindersCard.list;
+  grid.append(tasksCard.card, habitsCard.card, remindersCard.card);
+  home.append(head, grid);
+  pagesContainer.prepend(home);
+  pages["home-page"] = home;
+  const homeSearchInput = home.querySelector("#home-search");
+  if (homeSearchInput) {
+    homeSearchInput.addEventListener("input", () => {
+      state.ui.homeSearch = homeSearchInput.value.trim();
+      state.ui.taskSearch = state.ui.homeSearch;
+      state.ui.habitSearch = state.ui.homeSearch;
+      renderTasks(state.tasks, tasksList);
+      renderHabits(state.habits, habitsList);
+      renderTasks(state.tasks, homeTasksList);
+      renderHabits(state.habits, homeHabitsList);
+      renderReminders(state.reminders, homeRemindersList, state.ui.homeSearch);
+      renderReminders(state.reminders, remindersList, state.ui.homeSearch);
+    });
+  }
+};
+
+const initAssistantBubble = () => {
+  const assistantPage = pages["assistant-page"];
+  if (!assistantPage) return;
+  assistantPage.classList.add("assistant-flyout");
+  assistantPage.hidden = true;
+  const toggleBtn = document.createElement("button");
+  toggleBtn.type = "button";
+  toggleBtn.className = "assistant-fab";
+  toggleBtn.textContent = "Ассистент";
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "assistant-close";
+  closeBtn.textContent = "×";
+  assistantPage.appendChild(closeBtn);
+  let open = false;
+  const apply = () => {
+    assistantPage.hidden = !open;
+    toggleBtn.classList.toggle("open", open);
+  };
+  toggleBtn.onclick = () => {
+    open = !open;
+    apply();
+  };
+  closeBtn.onclick = () => {
+    open = false;
+    apply();
+  };
+  document.body.appendChild(toggleBtn);
+  apply();
+};
+
+const fixNavBarOrder = () => {
+  const navBar = navProfileBtn?.closest(".tabbar");
+  const navCreateWrap = navCreateBtn?.closest(".nav-create");
+  if (!navBar) return;
+  if (navCreateWrap && navCreateBtn && navCreateBtn.parentElement !== navCreateWrap) {
+    navCreateWrap.prepend(navCreateBtn);
+  }
+  if (navCreateWrap && creationMenu && creationMenu.parentElement !== navCreateWrap) {
+    navCreateWrap.appendChild(creationMenu);
+  }
+  [navAssistantBtn, navCreateWrap, navProfileBtn].filter(Boolean).forEach((node) => navBar.appendChild(node));
+};
+
 const today = new Date().toISOString().slice(0, 10);
 if (tasksDateInput) tasksDateInput.value = today;
 if (reminderDate) reminderDate.value = today;
 if (reminderTime) reminderTime.value = "09:00";
 
 initTelegram();
+buildHomePage();
+initAssistantBubble();
+fixNavBarOrder();
 elevateFilters();
 bindNav();
 bindForms();
@@ -272,8 +383,8 @@ function switchPage(targetId) {
   state.currentPage = targetId;
   Object.entries(pages).forEach(([id, element]) => element && (element.hidden = id !== targetId));
   [navProfileBtn, navAssistantBtn, navCreateBtn].forEach((btn) => btn?.classList.remove("active"));
-  if (creationPages.includes(targetId)) navCreateBtn?.classList.add("active");
-  else if (targetId === "assistant-page") navAssistantBtn?.classList.add("active");
+  if (targetId === "home-page") navAssistantBtn?.classList.add("active");
+  else if (creationPages.includes(targetId)) navCreateBtn?.classList.add("active");
   else if (targetId === "profile-page") navProfileBtn?.classList.add("active");
   if (targetId === "profile-page") {
     loadProfile();
@@ -292,6 +403,10 @@ function switchPage(targetId) {
   }
   if (targetId === "reminders-page") {
     loadReminders();
+  }
+  if (targetId === "home-page") {
+    loadTaxonomy();
+    Promise.all([loadTasks(), loadHabits(), loadReminders()]);
   }
   closeCreationMenu();
   updateUserMeta();
@@ -333,8 +448,11 @@ function updatePanels() {
 }
 
 function bindNav() {
+  if (navAssistantBtn) navAssistantBtn.textContent = "Главная";
+  if (navCreateBtn) navCreateBtn.textContent = "Создание";
+  if (navProfileBtn) navProfileBtn.textContent = "Профиль";
   navProfileBtn?.addEventListener("click", () => switchPage("profile-page"));
-  navAssistantBtn?.addEventListener("click", () => switchPage("assistant-page"));
+  navAssistantBtn?.addEventListener("click", () => switchPage("home-page"));
   navCreateBtn?.addEventListener("click", toggleCreationMenu);
   creationOptions.forEach((btn) =>
     btn.addEventListener("click", () => {
@@ -1057,9 +1175,11 @@ async function loadTasks() {
     const tasks = await apiFetch(`/tasks`);
     state.tasks = tasks || [];
     renderTasks(state.tasks);
+    if (homeTasksList) renderTasks(state.tasks, homeTasksList);
   } catch (error) {
     state.tasks = [];
     renderTasks(state.tasks);
+    if (homeTasksList) renderTasks(state.tasks, homeTasksList);
     setStatus(error.message, "error");
   }
 }
@@ -1103,7 +1223,7 @@ const createTagChip = (label, removable = false, onRemove = null) => {
   return chip;
 };
 
-function renderTasks(tasks) {
+function renderTasks(tasks, targetList = tasksList) {
   const search = (state.ui?.taskSearch || "").toLowerCase();
   const sortKey = state.ui?.taskSort || "priority_desc";
   const tagFilter = (state.ui?.taskTagFilter || []).map((id) => Number(id)).filter(Boolean);
@@ -1115,10 +1235,11 @@ function renderTasks(tasks) {
     return matchesSearch([task.title, task.category?.name, ...(task.tags?.map((t) => t.name) || [])], search);
   });
   const sorted = prioritizePinned(sortTasks(filtered, sortKey));
-  tasksList.innerHTML = "";
+  if (!targetList) return;
+  targetList.innerHTML = "";
   if (!sorted.length) {
     const message = tasks.length ? "Ничего не найдено по текущему поиску или сортировке" : "Задач пока нет";
-    tasksList.innerHTML = `<p class="muted">${message}</p>`;
+    targetList.innerHTML = `<p class="muted">${message}</p>`;
     return;
   }
   sorted.forEach((task) => {
@@ -1257,7 +1378,7 @@ function renderTasks(tasks) {
 
     body.append(detailsWrap, actions);
     card.append(header, body);
-    tasksList.appendChild(card);
+    targetList.appendChild(card);
   });
 }
 
@@ -1529,9 +1650,11 @@ async function loadHabits() {
     state.habits = habits || [];
     await loadHabitStatuses(state.habits);
     renderHabits(state.habits);
+    if (homeHabitsList) renderHabits(state.habits, homeHabitsList);
   } catch (error) {
     state.habits = [];
     renderHabits(state.habits);
+    if (homeHabitsList) renderHabits(state.habits, homeHabitsList);
     setStatus(error.message, "error");
   }
 }
@@ -1568,7 +1691,7 @@ function habitStatusText(habit) {
   return label;
 }
 
-function renderHabits(habits) {
+function renderHabits(habits, targetList = habitsList) {
   const search = (state.ui?.habitSearch || "").toLowerCase();
   const sortKey = state.ui?.habitSort || "name_asc";
   const tagFilter = (state.ui?.habitTagFilter || []).map((id) => Number(id)).filter(Boolean);
@@ -1580,10 +1703,11 @@ function renderHabits(habits) {
     return matchesSearch([habit.name, habit.category?.name, ...(habit.tags?.map((t) => t.name) || [])], search);
   });
   const sorted = prioritizePinned(sortHabits(filtered, sortKey));
-  habitsList.innerHTML = "";
+  if (!targetList) return;
+  targetList.innerHTML = "";
   if (!sorted.length) {
     const message = habits.length ? "Ничего не найдено по текущему поиску или сортировке" : "Привычек пока нет";
-    habitsList.innerHTML = `<p class="muted">${message}</p>`;
+    targetList.innerHTML = `<p class="muted">${message}</p>`;
     return;
   }
   sorted.forEach((habit) => {
@@ -1721,7 +1845,7 @@ function renderHabits(habits) {
 
     body.append(detailsWrap, actions);
     card.append(header, body);
-    habitsList.appendChild(card);
+    targetList.appendChild(card);
   });
 }
 
@@ -2057,9 +2181,11 @@ async function loadReminders() {
     const reminders = await apiFetch("/reminders");
     state.reminders = reminders || [];
     renderReminders(state.reminders);
+    if (homeRemindersList) renderReminders(state.reminders, homeRemindersList, state.ui.homeSearch);
   } catch (error) {
     state.reminders = [];
     renderReminders([]);
+    if (homeRemindersList) renderReminders([], homeRemindersList, state.ui.homeSearch);
     setStatus(error.message, "error");
   }
 }
@@ -2069,14 +2195,23 @@ function reminderTypeLabel(type) {
   return map[type] || "Напоминание";
 }
 
-function renderReminders(reminders) {
-  remindersList.innerHTML = "";
+function renderReminders(reminders, targetList = remindersList, searchQuery = "") {
+  if (!targetList) return;
+  targetList.innerHTML = "";
+  const q = (searchQuery || "").toLowerCase();
   const ordered = prioritizePinned(reminders.slice());
   if (!ordered.length) {
-    remindersList.innerHTML = '<p class="muted">Напоминаний пока нет</p>';
+    targetList.innerHTML = '<p class="muted">Напоминаний пока нет</p>';
     return;
   }
   ordered.forEach((reminder) => {
+    if (q) {
+      const hay = [reminder.behavior_rule, reminder.note]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!hay.includes(q)) return;
+    }
     const trigger = reminder.trigger_time ? new Date(reminder.trigger_time) : null;
     const dateLabel = trigger ? trigger.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }) : "Без даты";
     const timeLabel = trigger ? trigger.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "--:--";
@@ -2150,7 +2285,7 @@ function renderReminders(reminders) {
 
     body.append(detailsWrap, actions);
     card.append(header, body);
-    remindersList.appendChild(card);
+    targetList.appendChild(card);
   });
 }
 
