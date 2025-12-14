@@ -366,6 +366,17 @@ body[data-font-scale="small"] {
   width: 100%;
 }
 
+.filter-tag-select {
+  min-height: 42px;
+  max-height: 180px;
+}
+
+.filter-tag-select.compact-empty {
+  height: 42px;
+  max-height: 42px;
+  overflow-y: hidden;
+}
+
 .filters-card {
   margin-bottom: 14px;
   padding: 12px 14px;

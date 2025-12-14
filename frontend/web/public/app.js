@@ -86,6 +86,11 @@ const habitSearchInput = el("habit-search");
 const habitSortSelect = el("habit-sort");
 let taskFilterTagsSelect = el("task-filter-tags");
 let habitFilterTagsSelect = el("habit-filter-tags");
+function updateFilterSelectState(selectEl) {
+  if (!selectEl) return;
+  const hasSelection = readSelectedValues(selectEl).length > 0;
+  selectEl.classList.toggle("compact-empty", !hasSelection);
+}
 const navProfileBtn = el("nav-profile");
 const navCreateBtn = el("nav-create");
 const navAssistantBtn = el("nav-assistant");
@@ -392,15 +397,31 @@ function bindFilters() {
   }
   if (taskFilterTagsSelect) {
     taskFilterTagsSelect.addEventListener("change", () => {
-      state.ui.taskTagFilter = readSelectedValues(taskFilterTagsSelect);
+      if (taskFilterTagsSelect.options[0]?.selected && taskFilterTagsSelect.options[0].value === "") {
+        Array.from(taskFilterTagsSelect.options).forEach((opt, idx) => (opt.selected = idx === 0));
+        state.ui.taskTagFilter = [];
+      } else {
+        state.ui.taskTagFilter = readSelectedValues(taskFilterTagsSelect);
+        if (taskFilterTagsSelect.options[0]?.value === "") taskFilterTagsSelect.options[0].selected = false;
+      }
+      updateFilterSelectState(taskFilterTagsSelect);
       renderTasks(state.tasks);
     });
+    updateFilterSelectState(taskFilterTagsSelect);
   }
   if (habitFilterTagsSelect) {
     habitFilterTagsSelect.addEventListener("change", () => {
-      state.ui.habitTagFilter = readSelectedValues(habitFilterTagsSelect);
+      if (habitFilterTagsSelect.options[0]?.selected && habitFilterTagsSelect.options[0].value === "") {
+        Array.from(habitFilterTagsSelect.options).forEach((opt, idx) => (opt.selected = idx === 0));
+        state.ui.habitTagFilter = [];
+      } else {
+        state.ui.habitTagFilter = readSelectedValues(habitFilterTagsSelect);
+        if (habitFilterTagsSelect.options[0]?.value === "") habitFilterTagsSelect.options[0].selected = false;
+      }
+      updateFilterSelectState(habitFilterTagsSelect);
       renderHabits(state.habits);
     });
+    updateFilterSelectState(habitFilterTagsSelect);
   }
 }
 
@@ -804,8 +825,12 @@ const splitDateTimeParts = (iso) => {
   const [date, time] = iso.split("T");
   return { date: date || "", time: (time || "").slice(0, 5) };
 };
-const readSelectedValues = (selectEl) =>
-  !selectEl ? [] : Array.from(selectEl.selectedOptions || []).map((o) => Number(o.value)).filter(Boolean);
+function readSelectedValues(selectEl) {
+  if (!selectEl) return [];
+  return Array.from(selectEl.selectedOptions || [])
+    .map((o) => Number(o.value))
+    .filter(Boolean);
+}
 
 function fillCategorySelect(selectEl, selectedId = null) {
   if (!selectEl) return;
@@ -978,8 +1003,10 @@ function fillFilterTagSelect(selectEl, selectedIds = []) {
   if (!selectEl) return;
   const selectedSet = new Set((selectedIds || []).map((id) => Number(id)));
   selectEl.innerHTML = "";
+  const emptyOption = new Option("Без фильтра", "", !selectedSet.size, !selectedSet.size);
+  selectEl.appendChild(emptyOption);
   if (!state.tags.length) {
-    const placeholder = new Option("Тегов нет", "", true, false);
+    const placeholder = new Option("Тегов нет", "__no_tags__", false, false);
     placeholder.disabled = true;
     selectEl.appendChild(placeholder);
   } else {
@@ -989,6 +1016,7 @@ function fillFilterTagSelect(selectEl, selectedIds = []) {
       selectEl.appendChild(option);
     });
   }
+  updateFilterSelectState(selectEl);
 }
 
 const syncCreationSelectors = () => {
@@ -1041,7 +1069,9 @@ function taskStatusLabel(status) {
   return map[status] || "-";
 }
 
-const statusPillClass = (key) => `status-${key || "pending"}`;
+function statusPillClass(key) {
+  return `status-${key || "pending"}`;
+}
 
 const createMetaChip = (icon, label, value) => {
   const chip = document.createElement("div");
