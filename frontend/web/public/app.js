@@ -42,6 +42,7 @@ const state = {
     taskTagFilter: [],
     habitTagFilter: [],
     homeSearch: "",
+    homeTaskSort: "date_desc",
   },
   userTimezone: initialTimezone,
   telegramUser: tg?.initDataUnsafe?.user || null,
@@ -236,11 +237,28 @@ const buildHomePage = () => {
       <h2>Главная</h2>
       <p class="muted">Все задачи, привычки и напоминания в одном месте, отсортированы по дате.</p>
     </div>
-    <div class="inline-input">
-      <label for="home-search">Поиск</label>
-      <input type="search" id="home-search" placeholder="Введите название или тег" />
-    </div>
   `;
+  const filtersCard = document.createElement("article");
+  filtersCard.className = "card filters-card";
+  const filtersRow = document.createElement("div");
+  filtersRow.className = "filters-row filters-row--tasks";
+  filtersRow.innerHTML = `
+    <label class="inline-input filters-search">
+      Поиск (название, категория, теги)
+      <input type="search" id="home-search" placeholder="Введите название или категорию" />
+    </label>
+    <label class="inline-input filters-sort">
+      Сортировка задач
+      <select id="home-task-sort">
+        <option value="date_desc">По дате (позже -> раньше)</option>
+        <option value="date_asc">По дате (раньше -> позже)</option>
+        <option value="priority_desc">По приоритету (выше -> ниже)</option>
+        <option value="priority_asc">По приоритету (ниже -> выше)</option>
+        <option value="title">По названию (А->Я)</option>
+      </select>
+    </label>
+  `;
+  filtersCard.appendChild(filtersRow);
   const grid = document.createElement("div");
   grid.className = "home-grid";
   const makeCard = (title, listId) => {
@@ -262,7 +280,7 @@ const buildHomePage = () => {
   homeHabitsList = habitsCard.list;
   homeRemindersList = remindersCard.list;
   grid.append(tasksCard.card, habitsCard.card, remindersCard.card);
-  home.append(head, grid);
+  home.append(head, filtersCard, grid);
   pagesContainer.prepend(home);
   pages["home-page"] = home;
   const homeSearchInput = home.querySelector("#home-search");
@@ -273,10 +291,19 @@ const buildHomePage = () => {
       state.ui.habitSearch = state.ui.homeSearch;
       renderTasks(state.tasks, tasksList);
       renderHabits(state.habits, habitsList);
-      renderTasks(state.tasks, homeTasksList);
+      renderTasks(state.tasks, homeTasksList, state.ui.homeTaskSort);
       renderHabits(state.habits, homeHabitsList);
       renderReminders(state.reminders, homeRemindersList, state.ui.homeSearch);
       renderReminders(state.reminders, remindersList, state.ui.homeSearch);
+    });
+    homeSearchInput.value = state.ui.homeSearch;
+  }
+  const homeSortSelect = home.querySelector("#home-task-sort");
+  if (homeSortSelect) {
+    homeSortSelect.value = state.ui.homeTaskSort || "date_desc";
+    homeSortSelect.addEventListener("change", () => {
+      state.ui.homeTaskSort = homeSortSelect.value;
+      renderTasks(state.tasks, homeTasksList, state.ui.homeTaskSort);
     });
   }
 };
@@ -1175,11 +1202,11 @@ async function loadTasks() {
     const tasks = await apiFetch(`/tasks`);
     state.tasks = tasks || [];
     renderTasks(state.tasks);
-    if (homeTasksList) renderTasks(state.tasks, homeTasksList);
+    if (homeTasksList) renderTasks(state.tasks, homeTasksList, state.ui.homeTaskSort);
   } catch (error) {
     state.tasks = [];
     renderTasks(state.tasks);
-    if (homeTasksList) renderTasks(state.tasks, homeTasksList);
+    if (homeTasksList) renderTasks(state.tasks, homeTasksList, state.ui.homeTaskSort);
     setStatus(error.message, "error");
   }
 }
@@ -1223,9 +1250,9 @@ const createTagChip = (label, removable = false, onRemove = null) => {
   return chip;
 };
 
-function renderTasks(tasks, targetList = tasksList) {
+function renderTasks(tasks, targetList = tasksList, sortOverride = null) {
   const search = (state.ui?.taskSearch || "").toLowerCase();
-  const sortKey = state.ui?.taskSort || "priority_desc";
+  const sortKey = sortOverride || state.ui?.taskSort || "priority_desc";
   const tagFilter = (state.ui?.taskTagFilter || []).map((id) => Number(id)).filter(Boolean);
   const filtered = tasks.filter((task) => {
     if (tagFilter.length) {

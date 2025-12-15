@@ -397,6 +397,10 @@ body[data-font-scale="small"] {
   gap: 12px;
 }
 
+.home-grid .filters-card {
+  grid-column: 1 / -1;
+}
+
 .assistant-fab {
   position: fixed;
   right: 20px;
