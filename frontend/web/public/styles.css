@@ -471,6 +471,222 @@ body[data-font-scale="small"] {
   }
 }
 
+/* Modern entry cards */
+.entry-modern {
+  padding: 14px;
+}
+.entry-modern.completed {
+  background: linear-gradient(180deg, rgba(95, 191, 123, 0.12), rgba(95, 191, 123, 0.06)), var(--card);
+  border-color: rgba(95, 191, 123, 0.45);
+  box-shadow: 0 0 0 2px rgba(95, 191, 123, 0.3), var(--shadow);
+}
+.entry-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.entry-title-block {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.entry-emoji {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+}
+.entry-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.entry-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.entry-modern .pin-btn {
+  position: static;
+  width: 36px;
+  height: 36px;
+}
+.kebab-wrap {
+  position: relative;
+}
+.kebab-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+.finish-control {
+  position: relative;
+  display: grid;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(
+      90deg,
+      rgba(95, 191, 123, 0.12) var(--complete, 0%),
+      rgba(95, 191, 123, 0) var(--complete, 0%)
+    ),
+    linear-gradient(90deg, #6b8bff 0%, #8aa6ff 100%);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  overflow: hidden;
+}
+.finish-slider {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  z-index: 2;
+}
+.finish-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--stroke);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.finish-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--stroke);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.finish-slider::-webkit-slider-runnable-track,
+.finish-slider::-moz-range-track {
+  background: transparent;
+}
+.finish-label {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text);
+  pointer-events: auto;
+  background: transparent;
+  border: none;
+  padding: 6px 0;
+}
+.kebab-menu {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  padding: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  z-index: 10;
+}
+.kebab-menu.open {
+  display: flex;
+}
+.kebab-menu button {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.kebab-menu button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.meta-line {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.meta-line__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-weight: 600;
+}
+.meta-line__item .icon {
+  opacity: 0.8;
+}
+.tag-row.compact {
+  margin: 4px 0 10px;
+}
+.entry-body {
+  display: grid;
+  gap: 12px;
+}
+.checklist {
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.checklist-list {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.checklist-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.checklist-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+.checklist-add {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.checklist-add input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 8px 10px;
+}
+.checklist-add button {
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: var(--accent);
+  color: var(--accent-text);
+  padding: 8px 10px;
+}
+
+
 .assistant-form {
     display: flex;
     gap: 10px;

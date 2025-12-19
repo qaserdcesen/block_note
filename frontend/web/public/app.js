@@ -7,6 +7,7 @@ const initialTimezone =
 const ADD_CATEGORY_VALUE = "__add_category__";
 const ADD_TAG_VALUE = "__add_tag__";
 const EMOJI_STORAGE_KEY = "cthm_emojis";
+const SUBTASKS_KEY = "cthm_subtasks";
 
 const loadEmojiStore = () => {
   try {
@@ -158,6 +159,49 @@ const setEmoji = (type, id, value) => {
 const emojiFor = (type, id, fallback) => (state.emojis?.[type]?.[id] || fallback || "").trim() || fallback;
 
 const sliderColors = { accent: "#6b8bff", accentAlt: "#9c7cff" };
+
+const loadSubtaskStore = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SUBTASKS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+};
+
+let subtaskStore = loadSubtaskStore();
+
+const persistSubtasks = () => {
+  try {
+    localStorage.setItem(SUBTASKS_KEY, JSON.stringify(subtaskStore));
+  } catch {
+    /* ignore */
+  }
+};
+
+const subtaskKey = (kind, id) => `${kind}:${id}`;
+const getSubtasks = (kind, id) => subtaskStore[subtaskKey(kind, id)] || [];
+const addSubtask = (kind, id, title) => {
+  const key = subtaskKey(kind, id);
+  const list = getSubtasks(kind, id).slice();
+  list.push({ id: Date.now(), title, done: false });
+  subtaskStore[key] = list;
+  persistSubtasks();
+  return list;
+};
+const toggleSubtask = (kind, id, subId) => {
+  const key = subtaskKey(kind, id);
+  const list = getSubtasks(kind, id).map((item) => (item.id === subId ? { ...item, done: !item.done } : item));
+  subtaskStore[key] = list;
+  persistSubtasks();
+  return list;
+};
+const removeSubtask = (kind, id, subId) => {
+  const key = subtaskKey(kind, id);
+  const list = getSubtasks(kind, id).filter((item) => item.id !== subId);
+  subtaskStore[key] = list;
+  persistSubtasks();
+  return list;
+};
 
 const applySliderFill = (sliderEl) => {
   if (!sliderEl) return;
@@ -1250,6 +1294,46 @@ const createTagChip = (label, removable = false, onRemove = null) => {
   return chip;
 };
 
+const createKebabMenu = (onEdit, onDelete) => {
+  const wrap = document.createElement("div");
+  wrap.className = "kebab-wrap";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "kebab-btn";
+  btn.textContent = "⋮";
+  const menu = document.createElement("div");
+  menu.className = "kebab-menu";
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.textContent = "Редактировать";
+  const del = document.createElement("button");
+  del.type = "button";
+  del.textContent = "Удалить";
+  edit.onclick = () => {
+    menu.classList.remove("open");
+    onEdit?.();
+  };
+  del.onclick = () => {
+    menu.classList.remove("open");
+    onDelete?.();
+  };
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    menu.classList.toggle("open");
+  };
+  document.addEventListener("click", () => menu.classList.remove("open"));
+  menu.append(edit, del);
+  wrap.append(btn, menu);
+  return wrap;
+};
+
+const createMetaItem = (icon, text) => {
+  const item = document.createElement("div");
+  item.className = "meta-line__item";
+  item.innerHTML = `<span class="icon">${icon}</span><span>${text}</span>`;
+  return item;
+};
+
 function renderTasks(tasks, targetList = tasksList, sortOverride = null) {
   const search = (state.ui?.taskSearch || "").toLowerCase();
   const sortKey = sortOverride || state.ui?.taskSort || "priority_desc";
@@ -1270,57 +1354,46 @@ function renderTasks(tasks, targetList = tasksList, sortOverride = null) {
     return;
   }
   sorted.forEach((task) => {
-    const statusKey = (task.status || completionStatusFromValue(task.completion_value) || "pending").toLowerCase();
-    const statusLabel = taskStatusLabel(statusKey);
     const dueDate = task.due_datetime ? new Date(task.due_datetime) : null;
-    const dueDateLabel = dueDate
-      ? dueDate.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" })
-      : "Без даты";
+    const dueDateLabel = dueDate ? dueDate.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }) : "Без даты";
     const dueTimeLabel = dueDate ? dueDate.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "--:--";
     const categoryLabel = task.category?.name || "Без категории";
     const tags = task.tags || [];
     const priorityValue = task.priority ?? 0;
-    const progressValue = clamp(task.completion_value || 0, 0, 100);
-    const emoji = emojiFor("tasks", task.id, task.emoji || "🍦");
+    let progressValue = clamp(task.completion_value || 0, 0, 100);
+    const emoji = emojiFor("tasks", task.id, task.emoji || "📝");
 
     const card = document.createElement("article");
-    card.className = "card entry neo-card task-card";
-    const pinBtn = createPinButton(!!task.pinned, () => togglePinned("task", task.id, !task.pinned));
-    card.appendChild(pinBtn);
+    card.className = "card entry neo-card task-card entry-modern";
 
-    const header = document.createElement("div");
-    header.className = "task-head";
+    const head = document.createElement("div");
+    head.className = "entry-head";
     const titleWrap = document.createElement("div");
-    titleWrap.className = "task-title-block";
+    titleWrap.className = "entry-title-block";
     titleWrap.innerHTML = `
-      <div class="task-emoji">${emoji}</div>
-      <div class="task-title-text">
-        <div class="task-title">${task.title}</div>
+      <div class="entry-emoji">${emoji}</div>
+      <div>
+        <div class="entry-title">${task.title}</div>
         <p class="muted entry-description">${task.description || "Описание не заполнено"}</p>
       </div>
     `;
-    const statusEl = document.createElement("span");
-    statusEl.className = `status-pill ${statusPillClass(statusKey)}`;
-    statusEl.textContent = statusLabel;
-    header.append(titleWrap, statusEl);
+    const actionsTop = document.createElement("div");
+    actionsTop.className = "entry-actions";
+    const pinBtn = createPinButton(!!task.pinned, () => togglePinned("task", task.id, !task.pinned));
+    const kebab = createKebabMenu(() => openTaskEditor(task, card), () => deleteTask(task.id));
+    actionsTop.append(pinBtn, kebab);
+    head.append(titleWrap, actionsTop);
 
-    const body = document.createElement("div");
-    body.className = "card-body task-body";
-
-    const metaGrid = document.createElement("div");
-    metaGrid.className = "meta-grid";
-    metaGrid.append(
-      createMetaChip("📅", "Срок", dueDateLabel),
-      createMetaChip("⏰", "Время", dueTimeLabel),
-      createMetaChip("🏷", "Категория", categoryLabel),
-      createMetaChip("⭐", "Приоритет", priorityValue || "-")
+    const metaLine = document.createElement("div");
+    metaLine.className = "meta-line";
+    metaLine.append(
+      createMetaItem("&#128197;", `${dueDateLabel}, ${dueTimeLabel}`),
+      createMetaItem("&#128193;", categoryLabel),
+      createMetaItem("&#9873;", `Приоритет ${priorityValue || "-"}`)
     );
 
     const tagsRow = document.createElement("div");
-    tagsRow.className = "tag-row";
-    const tagsLabel = document.createElement("span");
-    tagsLabel.className = "muted";
-    tagsLabel.textContent = "Теги";
+    tagsRow.className = "tag-row compact";
     const tagsWrap = document.createElement("div");
     tagsWrap.className = "tag-chip-wrap";
     if (!tags.length) {
@@ -1328,83 +1401,92 @@ function renderTasks(tasks, targetList = tasksList, sortOverride = null) {
     } else {
       tags.forEach((tag) => tagsWrap.appendChild(createTagChip(`#${tag.name}`)));
     }
-    tagsRow.append(tagsLabel, tagsWrap);
+    tagsRow.append(tagsWrap);
 
-    const progressWrap = document.createElement("div");
-    progressWrap.className = "progress-shell";
-    const doneBtn = document.createElement("button");
-    doneBtn.type = "button";
-    doneBtn.className = "ghost-pill";
-    doneBtn.textContent = progressValue >= 100 ? "✔ Готово" : "○ Готово";
+    const checklist = document.createElement("div");
+    checklist.className = "checklist";
+    const subtasks = getSubtasks("task", task.id);
+    const listEl = document.createElement("div");
+    listEl.className = "checklist-list";
+    const renderSubtasks = () => {
+      listEl.innerHTML = "";
+      if (!subtasks.length) {
+        listEl.innerHTML = '<span class="muted">Подзадач пока нет</span>';
+        return;
+      }
+      subtasks.forEach((sub) => {
+        const item = document.createElement("label");
+        item.className = "checklist-item";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = sub.done;
+        cb.onchange = () => {
+          const next = toggleSubtask("task", task.id, sub.id);
+          subtasks.splice(0, subtasks.length, ...next);
+          renderSubtasks();
+        };
+        const span = document.createElement("span");
+        span.textContent = sub.title;
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "ghost-btn";
+        del.textContent = "×";
+        del.onclick = () => {
+          const next = removeSubtask("task", task.id, sub.id);
+          subtasks.splice(0, subtasks.length, ...next);
+          renderSubtasks();
+        };
+        item.append(cb, span, del);
+        listEl.appendChild(item);
+      });
+    };
+    renderSubtasks();
+    const addWrap = document.createElement("div");
+    addWrap.className = "checklist-add";
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.placeholder = "Новая подзадача";
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.textContent = "+";
+    addBtn.onclick = () => {
+      const title = (addInput.value || "").trim();
+      if (!title) return;
+      const next = addSubtask("task", task.id, title);
+      subtasks.splice(0, subtasks.length, ...next);
+      addInput.value = "";
+      renderSubtasks();
+    };
+    addWrap.append(addInput, addBtn);
+    checklist.append(listEl, addWrap);
 
-    const progressStack = document.createElement("div");
-    progressStack.className = "progress-stack";
-    const progressSlider = document.createElement("input");
-    progressSlider.type = "range";
-    progressSlider.min = 0;
-    progressSlider.max = 100;
-    progressSlider.step = 5;
-    progressSlider.value = progressValue;
-    progressSlider.className = "progress-slider";
-    applySliderFill(progressSlider);
-    const progressPercent = document.createElement("span");
-    progressPercent.className = "progress-percent";
-    progressPercent.textContent = `${progressValue}%`;
-    progressSlider.addEventListener("input", () => {
-      const normalized = normalizeCompletionValue(progressSlider.value);
-      progressSlider.value = normalized;
-      progressPercent.textContent = `${normalized}%`;
-      applySliderFill(progressSlider);
-    });
-    progressSlider.addEventListener("change", () => updateTaskCompletion(task.id, progressSlider.value));
-    doneBtn.onclick = () => {
-      const current = normalizeCompletionValue(progressSlider.value);
-      const next = current >= 100 ? 0 : 100;
-      progressSlider.value = next;
-      progressPercent.textContent = `${next}%`;
-      applySliderFill(progressSlider);
+    const footer = document.createElement("div");
+    footer.className = "entry-footer";
+    const finishControl = document.createElement("div");
+    finishControl.className = "finish-control";
+    const finishLabel = document.createElement("button");
+    finishLabel.type = "button";
+    finishLabel.className = "finish-label";
+    const applyFinishState = (val) => {
+      progressValue = val;
+      finishControl.style.setProperty("--complete", `${val}%`);
+      finishLabel.textContent = val >= 100 ? "Сбросить прогресс" : "Завершить задачу";
+      card.classList.toggle("completed", val >= 100);
+    };
+    applyFinishState(progressValue);
+    finishControl.onclick = () => {
+      const next = progressValue >= 100 ? 0 : 100;
+      applyFinishState(next);
       updateTaskCompletion(task.id, next);
     };
-    progressStack.append(progressSlider);
-    progressWrap.append(doneBtn, progressStack, progressPercent);
+    finishControl.append(finishLabel);
+    footer.append(finishControl);
 
-    const detailsWrap = document.createElement("div");
-    detailsWrap.className = "task-details";
-    detailsWrap.append(metaGrid, tagsRow, progressWrap);
+    const body = document.createElement("div");
+    body.className = "card-body task-body entry-body";
+    body.append(metaLine, tagsRow, checklist, footer);
 
-    const actions = document.createElement("div");
-    actions.className = "action-row";
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.className = "btn-soft";
-    editBtn.textContent = "✏ Редактировать";
-    editBtn.onclick = () => openTaskEditor(task, card);
-    const collapseBtn = document.createElement("button");
-    collapseBtn.type = "button";
-    collapseBtn.className = "btn-soft ghost";
-    collapseBtn.textContent = "Свернуть";
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "btn-danger";
-    deleteBtn.textContent = "🗑 Удалить";
-    deleteBtn.onclick = () => deleteTask(task.id);
-    actions.append(editBtn, collapseBtn, deleteBtn);
-
-    let collapsed = false;
-    const applyCollapsed = () => {
-      detailsWrap.hidden = collapsed;
-      statusEl.hidden = collapsed;
-      collapseBtn.textContent = collapsed ? "Развернуть" : "Свернуть";
-      card.classList.toggle("collapsed", collapsed);
-    };
-    collapseBtn.onclick = () => {
-      collapsed = !collapsed;
-      applyCollapsed();
-    };
-    applyCollapsed();
-
-    body.append(detailsWrap, actions);
-    card.append(header, body);
+    card.append(head, body);
     targetList.appendChild(card);
   });
 }
@@ -1720,7 +1802,7 @@ function habitStatusText(habit) {
 
 function renderHabits(habits, targetList = habitsList) {
   const search = (state.ui?.habitSearch || "").toLowerCase();
-  const sortKey = state.ui?.habitSort || "name_asc";
+  const sortKey = (state.ui?.habitSort || "name_asc");
   const tagFilter = (state.ui?.habitTagFilter || []).map((id) => Number(id)).filter(Boolean);
   const filtered = habits.filter((habit) => {
     if (tagFilter.length) {
@@ -1738,51 +1820,44 @@ function renderHabits(habits, targetList = habitsList) {
     return;
   }
   sorted.forEach((habit) => {
-    const statusLabel = habitStatusText(habit);
-    const statusKey = habit.is_active === false ? "cancelled" : completionStatusFromValue(habit.completion_value);
     const categoryLabel = habit.category?.name || "Без категории";
     const tags = habit.tags || [];
     const scheduleLabel = habitScheduleLabel(habit.schedule_type);
-    const progressValue = clamp(habit.completion_value || 0, 0, 100);
-    const emoji = emojiFor("habits", habit.id, habit.emoji || "🌀");
+    const priorityValue = habit.priority ?? "-";
+    let progressValue = clamp(habit.completion_value || 0, 0, 100);
+    const emoji = emojiFor("habits", habit.id, habit.emoji || "📌");
 
     const card = document.createElement("article");
-    card.className = "card entry neo-card habit-card";
-    const pinBtn = createPinButton(!!habit.pinned, () => togglePinned("habit", habit.id, !habit.pinned));
-    card.appendChild(pinBtn);
+    card.className = "card entry neo-card habit-card entry-modern";
 
-    const header = document.createElement("div");
-    header.className = "habit-head";
+    const head = document.createElement("div");
+    head.className = "entry-head";
     const titleWrap = document.createElement("div");
-    titleWrap.className = "habit-title-block";
+    titleWrap.className = "entry-title-block";
     titleWrap.innerHTML = `
-      <div class="habit-emoji">${emoji}</div>
-      <div class="habit-title-text">
-        <div class="habit-title">${habit.name}</div>
+      <div class="entry-emoji">${emoji}</div>
+      <div>
+        <div class="entry-title">${habit.name}</div>
         <p class="muted entry-description">${habit.description || "Описание не заполнено"}</p>
       </div>
     `;
-    const statusEl = document.createElement("span");
-    statusEl.className = `status-pill ${statusPillClass(statusKey)}`;
-    statusEl.textContent = statusLabel;
-    header.append(titleWrap, statusEl);
+    const actionsTop = document.createElement("div");
+    actionsTop.className = "entry-actions";
+    const pinBtn = createPinButton(!!habit.pinned, () => togglePinned("habit", habit.id, !habit.pinned));
+    const kebab = createKebabMenu(() => openHabitEditor(habit, card), () => deleteHabit(habit.id));
+    actionsTop.append(pinBtn, kebab);
+    head.append(titleWrap, actionsTop);
 
-    const body = document.createElement("div");
-    body.className = "card-body habit-body";
-
-    const metaGrid = document.createElement("div");
-    metaGrid.className = "meta-grid";
-    metaGrid.append(
-      createMetaChip("📅", "График", scheduleLabel),
-      createMetaChip("🏷", "Категория", categoryLabel),
-      createMetaChip("⭐", "Приоритет", habit.priority ?? "-")
+    const metaLine = document.createElement("div");
+    metaLine.className = "meta-line";
+    metaLine.append(
+      createMetaItem("🗓", scheduleLabel),
+      createMetaItem("&#128193;", categoryLabel),
+      createMetaItem("&#9873;", `Приоритет ${priorityValue}`)
     );
 
     const tagsRow = document.createElement("div");
-    tagsRow.className = "tag-row";
-    const tagsLabel = document.createElement("span");
-    tagsLabel.className = "muted";
-    tagsLabel.textContent = "Теги";
+    tagsRow.className = "tag-row compact";
     const tagsWrap = document.createElement("div");
     tagsWrap.className = "tag-chip-wrap";
     if (!tags.length) {
@@ -1790,88 +1865,92 @@ function renderHabits(habits, targetList = habitsList) {
     } else {
       tags.forEach((tag) => tagsWrap.appendChild(createTagChip(`#${tag.name}`)));
     }
-    tagsRow.append(tagsLabel, tagsWrap);
+    tagsRow.append(tagsWrap);
 
-    const progressWrap = document.createElement("div");
-    progressWrap.className = "progress-shell";
-    const doneBtn = document.createElement("button");
-    doneBtn.type = "button";
-    doneBtn.className = "ghost-pill";
-    doneBtn.textContent = progressValue >= 100 ? "✔ Готово" : "○ Готово";
+    const checklist = document.createElement("div");
+    checklist.className = "checklist";
+    const subtasks = getSubtasks("habit", habit.id);
+    const listEl = document.createElement("div");
+    listEl.className = "checklist-list";
+    const renderSubtasks = () => {
+      listEl.innerHTML = "";
+      if (!subtasks.length) {
+        listEl.innerHTML = '<span class="muted">Подзадач пока нет</span>';
+        return;
+      }
+      subtasks.forEach((sub) => {
+        const item = document.createElement("label");
+        item.className = "checklist-item";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = sub.done;
+        cb.onchange = () => {
+          const next = toggleSubtask("habit", habit.id, sub.id);
+          subtasks.splice(0, subtasks.length, ...next);
+          renderSubtasks();
+        };
+        const span = document.createElement("span");
+        span.textContent = sub.title;
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "ghost-btn";
+        del.textContent = "×";
+        del.onclick = () => {
+          const next = removeSubtask("habit", habit.id, sub.id);
+          subtasks.splice(0, subtasks.length, ...next);
+          renderSubtasks();
+        };
+        item.append(cb, span, del);
+        listEl.appendChild(item);
+      });
+    };
+    renderSubtasks();
+    const addWrap = document.createElement("div");
+    addWrap.className = "checklist-add";
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.placeholder = "Новая подзадача";
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.textContent = "+";
+    addBtn.onclick = () => {
+      const title = (addInput.value || "").trim();
+      if (!title) return;
+      const next = addSubtask("habit", habit.id, title);
+      subtasks.splice(0, subtasks.length, ...next);
+      addInput.value = "";
+      renderSubtasks();
+    };
+    addWrap.append(addInput, addBtn);
+    checklist.append(listEl, addWrap);
 
-    const progressStack = document.createElement("div");
-    progressStack.className = "progress-stack";
-    const progressSlider = document.createElement("input");
-    progressSlider.type = "range";
-    progressSlider.min = 0;
-    progressSlider.max = 100;
-    progressSlider.step = 5;
-    progressSlider.value = progressValue;
-    progressSlider.className = "progress-slider";
-    applySliderFill(progressSlider);
-    const progressPercent = document.createElement("span");
-    progressPercent.className = "progress-percent";
-    progressPercent.textContent = `${progressValue}%`;
-    progressSlider.addEventListener("input", () => {
-      const normalized = normalizeCompletionValue(progressSlider.value);
-      progressSlider.value = normalized;
-      progressPercent.textContent = `${normalized}%`;
-      applySliderFill(progressSlider);
-    });
-    progressSlider.addEventListener("change", () => updateHabitCompletion(habit.id, progressSlider.value));
-    doneBtn.onclick = () => {
-      const current = normalizeCompletionValue(progressSlider.value);
-      const next = current >= 100 ? 0 : 100;
-      progressSlider.value = next;
-      progressPercent.textContent = `${next}%`;
-      applySliderFill(progressSlider);
+    const footer = document.createElement("div");
+    footer.className = "entry-footer";
+    const finishControl = document.createElement("div");
+    finishControl.className = "finish-control";
+    const finishLabel = document.createElement("button");
+    finishLabel.type = "button";
+    finishLabel.className = "finish-label";
+    const applyFinishState = (val) => {
+      progressValue = val;
+      finishControl.style.setProperty("--complete", `${val}%`);
+      finishLabel.textContent = val >= 100 ? "Сбросить прогресс" : "Отметить выполнение";
+      card.classList.toggle("completed", val >= 100);
+    };
+    applyFinishState(progressValue);
+    finishControl.onclick = () => {
+      const next = progressValue >= 100 ? 0 : 100;
+      applyFinishState(next);
       updateHabitCompletion(habit.id, next);
     };
-    progressStack.append(progressSlider);
-    progressWrap.append(doneBtn, progressStack, progressPercent);
+    finishControl.append(finishLabel);
+    footer.append(finishControl);
 
-    const detailsWrap = document.createElement("div");
-    detailsWrap.className = "habit-details";
-    detailsWrap.append(metaGrid, tagsRow, progressWrap);
+    const body = document.createElement("div");
+    body.className = "card-body habit-body entry-body";
+    body.append(metaLine, tagsRow, checklist, footer);
 
-    const actions = document.createElement("div");
-    actions.className = "action-row";
-    const skipBtn = document.createElement("button");
-    skipBtn.type = "button";
-    skipBtn.className = "ghost-pill";
-    skipBtn.textContent = "⏸ Пропустить сегодня";
-    skipBtn.onclick = () => logHabitStatus(habit.id, "skipped");
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.className = "btn-soft";
-    editBtn.textContent = "✏ Редактировать";
-    editBtn.onclick = () => openHabitEditor(habit, card);
-    const collapseBtn = document.createElement("button");
-    collapseBtn.type = "button";
-    collapseBtn.className = "btn-soft ghost";
-    collapseBtn.textContent = "Свернуть";
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "btn-danger";
-    deleteBtn.textContent = "🗑 Удалить";
-    deleteBtn.onclick = () => deleteHabit(habit.id);
-    actions.append(skipBtn, editBtn, collapseBtn, deleteBtn);
-
-    let collapsed = false;
-    const applyCollapsed = () => {
-      detailsWrap.hidden = collapsed;
-      statusEl.hidden = collapsed;
-      collapseBtn.textContent = collapsed ? "Развернуть" : "Свернуть";
-      card.classList.toggle("collapsed", collapsed);
-    };
-    collapseBtn.onclick = () => {
-      collapsed = !collapsed;
-      applyCollapsed();
-    };
-    applyCollapsed();
-
-    body.append(detailsWrap, actions);
-    card.append(header, body);
+    card.append(head, body);
     targetList.appendChild(card);
   });
 }
@@ -2224,175 +2303,120 @@ function reminderTypeLabel(type) {
 
 function renderReminders(reminders, targetList = remindersList, searchQuery = "") {
   if (!targetList) return;
-  targetList.innerHTML = "";
   const q = (searchQuery || "").toLowerCase();
+  targetList.innerHTML = "";
   const ordered = prioritizePinned(reminders.slice());
-  if (!ordered.length) {
+  const filtered = ordered.filter((rem) => {
+    if (!q) return true;
+    const hay = [rem.behavior_rule, rem.note].filter(Boolean).join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+  if (!filtered.length) {
     targetList.innerHTML = '<p class="muted">Напоминаний пока нет</p>';
     return;
   }
-  ordered.forEach((reminder) => {
-    if (q) {
-      const hay = [reminder.behavior_rule, reminder.note]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      if (!hay.includes(q)) return;
-    }
+  filtered.forEach((reminder) => {
     const trigger = reminder.trigger_time ? new Date(reminder.trigger_time) : null;
     const dateLabel = trigger ? trigger.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }) : "Без даты";
     const timeLabel = trigger ? trigger.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "--:--";
     const typeLabel = reminderTypeLabel(reminder.type);
     const statusKey = reminder.is_active === false ? "snoozed" : "pending";
     const statusLabel = statusKey === "snoozed" ? "Отложено" : "Запланировано";
-    const emoji = reminder.emoji || "🔔";
+    const emoji = reminder.emoji || "⏰";
 
     const card = document.createElement("article");
-    card.className = "card entry neo-card reminder-card";
-    const pinBtn = createPinButton(!!reminder.pinned, () => togglePinned("reminder", reminder.id, !reminder.pinned));
-    card.appendChild(pinBtn);
+    card.className = "card entry neo-card reminder-card entry-modern";
 
-    const header = document.createElement("div");
-    header.className = "reminder-head";
+    const head = document.createElement("div");
+    head.className = "entry-head";
     const titleWrap = document.createElement("div");
-    titleWrap.className = "reminder-title-block";
+    titleWrap.className = "entry-title-block";
     titleWrap.innerHTML = `
-      <div class="reminder-emoji">${emoji}</div>
-      <div class="reminder-title-text">
-        <div class="reminder-title">${reminder.behavior_rule || "Напоминание"}</div>
+      <div class="entry-emoji">${emoji}</div>
+      <div>
+        <div class="entry-title">${reminder.behavior_rule || "Напоминание"}</div>
         <p class="muted entry-description">${typeLabel}</p>
       </div>
     `;
-    const statusEl = document.createElement("span");
-    statusEl.className = `status-pill ${statusPillClass(statusKey)}`;
-    statusEl.textContent = statusLabel;
-    header.append(titleWrap, statusEl);
+    const actionsTop = document.createElement("div");
+    actionsTop.className = "entry-actions";
+    const pinBtn = createPinButton(!!reminder.pinned, () => togglePinned("reminder", reminder.id, !reminder.pinned));
+    const kebab = createKebabMenu(() => openReminderEditor(reminder, card), () => deleteReminder(reminder.id));
+    actionsTop.append(pinBtn, kebab);
+    head.append(titleWrap, actionsTop);
+
+    const metaLine = document.createElement("div");
+    metaLine.className = "meta-line";
+    metaLine.append(
+      createMetaItem("&#128197;", dateLabel),
+      createMetaItem("&#9201;", timeLabel),
+      createMetaItem("&#128276;", statusLabel)
+    );
+
+    const checklist = document.createElement("div");
+    checklist.className = "checklist";
+    const subtasks = getSubtasks("reminder", reminder.id);
+    const listEl = document.createElement("div");
+    listEl.className = "checklist-list";
+    const renderSubtasks = () => {
+      listEl.innerHTML = "";
+      if (!subtasks.length) {
+        listEl.innerHTML = '<span class="muted">Подзадач пока нет</span>';
+        return;
+      }
+      subtasks.forEach((sub) => {
+        const item = document.createElement("label");
+        item.className = "checklist-item";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = sub.done;
+        cb.onchange = () => {
+          const next = toggleSubtask("reminder", reminder.id, sub.id);
+          subtasks.splice(0, subtasks.length, ...next);
+          renderSubtasks();
+        };
+        const span = document.createElement("span");
+        span.textContent = sub.title;
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "ghost-btn";
+        del.textContent = "×";
+        del.onclick = () => {
+          const next = removeSubtask("reminder", reminder.id, sub.id);
+          subtasks.splice(0, subtasks.length, ...next);
+          renderSubtasks();
+        };
+        item.append(cb, span, del);
+        listEl.appendChild(item);
+      });
+    };
+    renderSubtasks();
+    const addWrap = document.createElement("div");
+    addWrap.className = "checklist-add";
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.placeholder = "Новая подзадача";
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.textContent = "+";
+    addBtn.onclick = () => {
+      const title = (addInput.value || "").trim();
+      if (!title) return;
+      const next = addSubtask("reminder", reminder.id, title);
+      subtasks.splice(0, subtasks.length, ...next);
+      addInput.value = "";
+      renderSubtasks();
+    };
+    addWrap.append(addInput, addBtn);
+    checklist.append(listEl, addWrap);
 
     const body = document.createElement("div");
-    body.className = "card-body reminder-body";
+    body.className = "card-body reminder-body entry-body";
+    body.append(metaLine, checklist);
 
-    const metaGrid = document.createElement("div");
-    metaGrid.className = "meta-grid";
-    metaGrid.append(createMetaChip("📅", "Дата", dateLabel), createMetaChip("⏰", "Время", timeLabel));
-
-    const detailsWrap = document.createElement("div");
-    detailsWrap.className = "reminder-details";
-    detailsWrap.append(metaGrid);
-
-    const actions = document.createElement("div");
-    actions.className = "action-row";
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.className = "btn-soft";
-    editBtn.textContent = "✏ Редактировать";
-    editBtn.onclick = () => openReminderEditor(reminder, card);
-    const collapseBtn = document.createElement("button");
-    collapseBtn.type = "button";
-    collapseBtn.className = "btn-soft ghost";
-    collapseBtn.textContent = "Свернуть";
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "btn-danger";
-    deleteBtn.textContent = "🗑 Удалить";
-    deleteBtn.onclick = () => deleteReminder(reminder.id);
-    actions.append(editBtn, collapseBtn, deleteBtn);
-
-    let collapsed = false;
-    const applyCollapsed = () => {
-      detailsWrap.hidden = collapsed;
-      statusEl.hidden = collapsed;
-      collapseBtn.textContent = collapsed ? "Развернуть" : "Свернуть";
-      card.classList.toggle("collapsed", collapsed);
-    };
-    collapseBtn.onclick = () => {
-      collapsed = !collapsed;
-      applyCollapsed();
-    };
-    applyCollapsed();
-
-    body.append(detailsWrap, actions);
-    card.append(header, body);
+    card.append(head, body);
     targetList.appendChild(card);
   });
-}
-
-async function deleteReminder(id) {
-  try {
-    await apiFetch(`/reminders/${id}`, { method: "DELETE" });
-    await loadReminders();
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
-}
-
-function openReminderEditor(reminder, card) {
-  card.querySelectorAll(".inline-editor").forEach((el) => el.remove());
-  card.classList.add("editing");
-  const { date, time } = splitDateTimeParts(reminder.trigger_time);
-  const form = document.createElement("form");
-  form.className = "inline-editor neo-editor";
-
-  const titleInput = document.createElement("input");
-  titleInput.type = "text";
-  titleInput.value = reminder.behavior_rule || "";
-
-  const dateInput = document.createElement("input");
-  dateInput.type = "date";
-  dateInput.value = date || "";
-
-  const timeInput = document.createElement("input");
-  timeInput.type = "time";
-  timeInput.value = time || "09:00";
-
-  const activeToggle = document.createElement("input");
-  activeToggle.type = "checkbox";
-  activeToggle.checked = reminder.is_active ?? true;
-
-  form.append(
-    labelWrap("Текст напоминания", titleInput),
-    labelWrap("Дата", dateInput),
-    labelWrap("Время", timeInput),
-    labelWrap("Активно", activeToggle)
-  );
-
-  const actions = document.createElement("div");
-  actions.className = "actions";
-  const saveBtn = document.createElement("button");
-  saveBtn.type = "submit";
-  saveBtn.textContent = "Сохранить";
-  const cancelBtn = document.createElement("button");
-  cancelBtn.type = "button";
-  cancelBtn.className = "ghost-btn";
-  cancelBtn.textContent = "Отмена";
-  cancelBtn.onclick = () => {
-    card.classList.remove("editing");
-    form.remove();
-  };
-  actions.append(saveBtn, cancelBtn);
-  form.append(actions);
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const payload = {
-      behavior_rule: titleInput.value,
-      trigger_time: isoFromDateTime(dateInput.value, timeInput.value),
-      trigger_timezone: state.userTimezone || "UTC",
-      type: reminder.type || "time",
-      is_active: !!activeToggle.checked,
-    };
-    try {
-      await apiFetch(`/reminders/${reminder.id}`, { method: "PATCH", body: JSON.stringify(payload) });
-      setStatus("Напоминание обновлено", "success");
-      form.remove();
-      card.classList.remove("editing");
-      await loadReminders();
-    } catch (error) {
-      setStatus(error.message, "error");
-    }
-  });
-
-  const container = card.querySelector(".card-body") || card;
-  container.appendChild(form);
 }
 
 async function loadAssistantHistory(limit = 50) {
@@ -2455,3 +2479,7 @@ async function refreshAll() {
   await loadTaxonomy();
   await Promise.all([loadTasks(), loadHabits(), loadReminders(), loadProfile(), loadGoals(), loadAssistantHistory()]);
 }
+
+
+
+
