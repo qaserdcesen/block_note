@@ -408,7 +408,7 @@ body[data-font-scale="small"] {
   padding: 10px 14px;
   border-radius: 999px;
   background: var(--accent);
-  color: var(--accent-text);
+  color: var(--text);
   border: none;
   box-shadow: var(--shadow);
   cursor: pointer;
@@ -434,6 +434,7 @@ body[data-font-scale="small"] {
   border-radius: 18px;
   box-shadow: var(--shadow);
   padding: 12px;
+  backdrop-filter: blur(12px);
 }
 
 .assistant-flyout .assistant-close {
@@ -518,8 +519,8 @@ body[data-font-scale="small"] {
   position: relative;
 }
 .kebab-btn {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.08);
@@ -527,7 +528,7 @@ body[data-font-scale="small"] {
   cursor: pointer;
   display: grid;
   place-items: center;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   padding: 0;
 }
@@ -682,7 +683,7 @@ body[data-font-scale="small"] {
   border-radius: 10px;
   border: 1px solid var(--stroke);
   background: var(--accent);
-  color: var(--accent-text);
+  color: var(--text);
   padding: 8px 10px;
 }
 
@@ -768,7 +769,7 @@ input,
 select,
 button {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   border: 1px solid var(--stroke);
   border-radius: 12px;
@@ -795,7 +796,7 @@ button:focus {
 
 button {
   background: linear-gradient(135deg, var(--accent), #9ea9ff);
-  color: var(--accent-text);
+  color: var(--text);
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
@@ -855,10 +856,10 @@ button:disabled {
   width: 40px;
   height: 40px;
   padding: 0;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.84));
-  color: #8b94a8;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08));
+  color: #999999;
   line-height: 1;
 }
 
