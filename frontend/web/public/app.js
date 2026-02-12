@@ -159,6 +159,8 @@ const setEmoji = (type, id, value) => {
 const emojiFor = (type, id, fallback) => (state.emojis?.[type]?.[id] || fallback || "").trim() || fallback;
 
 const sliderColors = { accent: "#6b8bff", accentAlt: "#9c7cff" };
+const ASSISTANT_CREATED_ENTRY_RE =
+  /\b(task|tasks|habit|habits|reminder|reminders|задача|задачи|привычка|привычки|напоминание|напоминания)\s*#(\d+)(?:\s*["“«]([^"”»\n]+)["”»])?/giu;
 
 const loadSubtaskStore = () => {
   try {
@@ -1365,6 +1367,8 @@ function renderTasks(tasks, targetList = tasksList, sortOverride = null) {
 
     const card = document.createElement("article");
     card.className = "card entry neo-card task-card entry-modern";
+    card.dataset.entryKind = "task";
+    card.dataset.entryId = String(task.id);
 
     const head = document.createElement("div");
     head.className = "entry-head";
@@ -1829,6 +1833,8 @@ function renderHabits(habits, targetList = habitsList) {
 
     const card = document.createElement("article");
     card.className = "card entry neo-card habit-card entry-modern";
+    card.dataset.entryKind = "habit";
+    card.dataset.entryId = String(habit.id);
 
     const head = document.createElement("div");
     head.className = "entry-head";
@@ -2326,6 +2332,8 @@ function renderReminders(reminders, targetList = remindersList, searchQuery = ""
 
     const card = document.createElement("article");
     card.className = "card entry neo-card reminder-card entry-modern";
+    card.dataset.entryKind = "reminder";
+    card.dataset.entryId = String(reminder.id);
 
     const head = document.createElement("div");
     head.className = "entry-head";
@@ -2453,6 +2461,124 @@ async function handleAssistant(event) {
   }
 }
 
+function normalizeAssistantEntryKind(rawKind = "") {
+  const kind = String(rawKind || "").toLowerCase();
+  if (kind.startsWith("task") || kind.startsWith("задач")) return "task";
+  if (kind.startsWith("habit") || kind.startsWith("привыч")) return "habit";
+  if (kind.startsWith("reminder") || kind.startsWith("напомин")) return "reminder";
+  return null;
+}
+
+function parseAssistantCreatedEntries(content = "") {
+  const source = String(content || "").trim();
+  if (!source) return { text: "", created: [] };
+  const doneIndex = source.search(/\bdone\s*:/iu);
+  const scanSource = doneIndex >= 0 ? source.slice(doneIndex) : source;
+  const created = [];
+  ASSISTANT_CREATED_ENTRY_RE.lastIndex = 0;
+  let match = ASSISTANT_CREATED_ENTRY_RE.exec(scanSource);
+  while (match) {
+    const kind = normalizeAssistantEntryKind(match[1]);
+    const id = Number(match[2]);
+    if (kind && Number.isFinite(id)) {
+      created.push({
+        kind,
+        id,
+        title: String(match[3] || "").trim(),
+      });
+    }
+    match = ASSISTANT_CREATED_ENTRY_RE.exec(scanSource);
+  }
+  const unique = [];
+  const seen = new Set();
+  created.forEach((item) => {
+    const key = `${item.kind}:${item.id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(item);
+  });
+  let text = source;
+  if (doneIndex >= 0 && unique.length) {
+    text = source.slice(0, doneIndex).trim().replace(/[\s,;:.!?-]+$/u, "");
+  }
+  return { text, created: unique };
+}
+
+function assistantEntryLabel(kind) {
+  const labels = {
+    task: "Задача",
+    habit: "Привычка",
+    reminder: "Напоминание",
+  };
+  return labels[kind] || "Запись";
+}
+
+function resetTaskFiltersForAssistantJump() {
+  state.ui.taskSearch = "";
+  state.ui.taskTagFilter = [];
+  if (taskSearchInput) taskSearchInput.value = "";
+  fillFilterTagSelect(taskFilterTagsSelect, []);
+}
+
+function resetHabitFiltersForAssistantJump() {
+  state.ui.habitSearch = "";
+  state.ui.habitTagFilter = [];
+  if (habitSearchInput) habitSearchInput.value = "";
+  fillFilterTagSelect(habitFilterTagsSelect, []);
+}
+
+async function navigateToAssistantEntry(kind, id) {
+  const targetId = Number(id);
+  if (!Number.isFinite(targetId)) return;
+  const pageByKind = {
+    task: "tasks-page",
+    habit: "habits-page",
+    reminder: "reminders-page",
+  };
+  const pageId = pageByKind[kind];
+  if (!pageId) return;
+  if (kind === "task") resetTaskFiltersForAssistantJump();
+  if (kind === "habit") resetHabitFiltersForAssistantJump();
+  switchPage(pageId);
+  if (kind === "task") await loadTasks();
+  if (kind === "habit") await loadHabits();
+  if (kind === "reminder") await loadReminders();
+  const selector = `.entry-modern[data-entry-kind="${kind}"][data-entry-id="${targetId}"]`;
+  const page = pages[pageId];
+  const target = page?.querySelector(selector);
+  if (!target) {
+    setStatus(`Не удалось найти ${assistantEntryLabel(kind).toLowerCase()} #${targetId}`, "error");
+    return;
+  }
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.classList.add("assistant-linked");
+  setTimeout(() => target.classList.remove("assistant-linked"), 1800);
+}
+
+function buildAssistantCreatedEntryLink(entry) {
+  const link = document.createElement("a");
+  link.href = "#";
+  link.className = "assistant-created-link";
+  const kicker = document.createElement("span");
+  kicker.className = "assistant-created-kicker";
+  kicker.textContent = "Создано";
+  const title = document.createElement("strong");
+  title.className = "assistant-created-title";
+  title.textContent = `${assistantEntryLabel(entry.kind)} #${entry.id}`;
+  const caption = document.createElement("span");
+  caption.className = "assistant-created-caption";
+  caption.textContent = entry.title || "Открыть запись";
+  const action = document.createElement("span");
+  action.className = "assistant-created-action";
+  action.textContent = "Открыть";
+  link.append(kicker, title, caption, action);
+  link.addEventListener("click", async (event) => {
+    event.preventDefault();
+    await navigateToAssistantEntry(entry.kind, entry.id);
+  });
+  return link;
+}
+
 function renderAssistantHistory() {
   if (!assistantHistoryEl) return;
   assistantHistoryEl.innerHTML = "";
@@ -2465,7 +2591,26 @@ function renderAssistantHistory() {
     const ts = item.created_at ? new Date(item.created_at) : new Date();
     const bubble = document.createElement("div");
     bubble.className = `assistant-bubble ${isUser ? "user" : "assistant"}`;
-    bubble.innerHTML = `<div>${item.content}</div><span class="assistant-meta">${ts.toLocaleTimeString("ru-RU")}</span>`;
+    const contentWrap = document.createElement("div");
+    contentWrap.className = "assistant-content";
+    const parsed = isUser ? { text: String(item.content || ""), created: [] } : parseAssistantCreatedEntries(item.content);
+    const contentText = (parsed.text || "").trim() || (parsed.created.length ? "Готово." : String(item.content || ""));
+    if (contentText) {
+      const text = document.createElement("div");
+      text.className = "assistant-text";
+      text.textContent = contentText;
+      contentWrap.appendChild(text);
+    }
+    if (!isUser && parsed.created.length) {
+      const createdWrap = document.createElement("div");
+      createdWrap.className = "assistant-created-list";
+      parsed.created.forEach((entry) => createdWrap.appendChild(buildAssistantCreatedEntryLink(entry)));
+      contentWrap.appendChild(createdWrap);
+    }
+    const meta = document.createElement("span");
+    meta.className = "assistant-meta";
+    meta.textContent = ts.toLocaleTimeString("ru-RU");
+    bubble.append(contentWrap, meta);
     assistantHistoryEl.appendChild(bubble);
   });
   assistantHistoryEl.scrollTop = assistantHistoryEl.scrollHeight;

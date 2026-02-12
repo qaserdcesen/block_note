@@ -970,11 +970,14 @@ button:disabled {
   transform: translate(-50%, 8px);
   padding: 12px;
   border-radius: 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--stroke);
-  box-shadow: var(--shadow);
+  background:
+    linear-gradient(150deg, rgba(30, 39, 72, 0.9), rgba(19, 27, 52, 0.86)),
+    radial-gradient(circle at 18% 12%, rgba(107, 139, 255, 0.16), transparent 46%);
+  border: 1px solid rgba(159, 178, 217, 0.24);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.36);
   width: min(360px, 92vw);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.16s ease, transform 0.16s ease;
@@ -1433,6 +1436,69 @@ p {
   border: 1px solid var(--stroke);
   color: var(--text);
   cursor: pointer;
+}
+
+.assistant-content {
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-text {
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.assistant-created-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.assistant-created-link {
+  display: grid;
+  gap: 4px;
+  text-decoration: none;
+  border-radius: 12px;
+  border: 1px solid rgba(107, 139, 255, 0.38);
+  background: linear-gradient(140deg, rgba(107, 139, 255, 0.14), rgba(126, 87, 194, 0.12));
+  color: inherit;
+  padding: 10px 12px;
+  transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.assistant-created-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(141, 161, 255, 0.7);
+  box-shadow: 0 8px 22px rgba(107, 139, 255, 0.2);
+}
+
+.assistant-created-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.assistant-created-title {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.assistant-created-caption {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.assistant-created-action {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.entry-modern.assistant-linked {
+  border-color: rgba(107, 139, 255, 0.72);
+  box-shadow: 0 0 0 2px rgba(107, 139, 255, 0.3), var(--shadow);
 }
 
 @media (max-width: 640px) {
