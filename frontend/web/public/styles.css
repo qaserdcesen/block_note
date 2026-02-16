@@ -651,6 +651,45 @@ body[data-font-scale="small"] {
   padding: 10px;
   background: rgba(255, 255, 255, 0.03);
 }
+.checklist-preview {
+  padding: 8px 10px;
+  margin-top: 2px;
+}
+.checklist-preview__title {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+.checklist-preview__list {
+  display: grid;
+  gap: 4px;
+}
+.checklist-preview__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.25;
+  cursor: pointer;
+}
+.checklist-preview__item input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+.checklist-preview__item.done .checklist-preview__text {
+  text-decoration: line-through;
+  opacity: 0.78;
+}
+.checklist-preview__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.checklist-preview__more {
+  font-size: 12px;
+}
 .checklist-list {
   display: grid;
   gap: 6px;

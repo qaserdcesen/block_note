@@ -1336,6 +1336,143 @@ const createMetaItem = (icon, text) => {
   return item;
 };
 
+function createChecklistEditor(kind, entryId, placeholder = "Новая подзадача", onChange = null) {
+  const checklist = document.createElement("div");
+  checklist.className = "checklist checklist-editor";
+
+  const title = document.createElement("div");
+  title.className = "muted";
+  title.textContent = "Подзадачи";
+
+  const listEl = document.createElement("div");
+  listEl.className = "checklist-list";
+
+  const renderSubtasks = () => {
+    const subtasks = getSubtasks(kind, entryId);
+    listEl.innerHTML = "";
+    if (!subtasks.length) {
+      listEl.innerHTML = '<span class="muted">Подзадач пока нет</span>';
+      if (typeof onChange === "function") onChange();
+      return;
+    }
+    subtasks.forEach((sub) => {
+      const item = document.createElement("label");
+      item.className = "checklist-item";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!sub.done;
+      cb.onchange = () => {
+        toggleSubtask(kind, entryId, sub.id);
+        renderSubtasks();
+      };
+      const span = document.createElement("span");
+      span.textContent = sub.title;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "ghost-btn";
+      del.textContent = "×";
+      del.onclick = () => {
+        removeSubtask(kind, entryId, sub.id);
+        renderSubtasks();
+      };
+      item.append(cb, span, del);
+      listEl.appendChild(item);
+    });
+    if (typeof onChange === "function") onChange();
+  };
+
+  const addWrap = document.createElement("div");
+  addWrap.className = "checklist-add";
+  const addInput = document.createElement("input");
+  addInput.type = "text";
+  addInput.placeholder = placeholder;
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.textContent = "+";
+  const submitAdd = () => {
+    const value = (addInput.value || "").trim();
+    if (!value) return;
+    addSubtask(kind, entryId, value);
+    addInput.value = "";
+    renderSubtasks();
+  };
+  addBtn.onclick = submitAdd;
+  addInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    submitAdd();
+  });
+  addWrap.append(addInput, addBtn);
+
+  renderSubtasks();
+  checklist.append(title, listEl, addWrap);
+  return checklist;
+}
+
+function createChecklistPreview(kind, entryId) {
+  const preview = document.createElement("div");
+  preview.className = "checklist checklist-preview";
+  preview.dataset.kind = kind;
+  preview.dataset.entryId = String(entryId);
+
+  const title = document.createElement("div");
+  title.className = "checklist-preview__title muted";
+
+  const list = document.createElement("div");
+  list.className = "checklist-preview__list";
+
+  const render = () => {
+    const subtasks = getSubtasks(kind, entryId);
+    if (!subtasks.length) {
+      preview.remove();
+      return;
+    }
+    const doneCount = subtasks.filter((item) => item.done).length;
+    title.textContent = `Подзадачи ${doneCount}/${subtasks.length}`;
+    list.innerHTML = "";
+    subtasks.slice(0, 3).forEach((sub) => {
+      const row = document.createElement("label");
+      row.className = `checklist-preview__item ${sub.done ? "done" : ""}`;
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = !!sub.done;
+      checkbox.addEventListener("change", () => {
+        toggleSubtask(kind, entryId, sub.id);
+        render();
+      });
+
+      const text = document.createElement("span");
+      text.className = "checklist-preview__text";
+      text.textContent = sub.title;
+
+      row.append(checkbox, text);
+      list.appendChild(row);
+    });
+    if (subtasks.length > 3) {
+      const more = document.createElement("div");
+      more.className = "checklist-preview__more muted";
+      more.textContent = `+${subtasks.length - 3} еще`;
+      list.appendChild(more);
+    }
+  };
+
+  render();
+  if (!preview.isConnected && !getSubtasks(kind, entryId).length) return null;
+  preview.append(title, list);
+  return preview;
+}
+
+function upsertChecklistPreview(container, kind, entryId, beforeSelector = null) {
+  if (!container) return;
+  container.querySelectorAll(`.checklist-preview[data-kind="${kind}"][data-entry-id="${entryId}"]`).forEach((node) => node.remove());
+  const preview = createChecklistPreview(kind, entryId);
+  if (!preview) return;
+  const anchor = beforeSelector ? container.querySelector(beforeSelector) : null;
+  if (anchor) container.insertBefore(preview, anchor);
+  else container.appendChild(preview);
+}
+
 function renderTasks(tasks, targetList = tasksList, sortOverride = null) {
   const search = (state.ui?.taskSearch || "").toLowerCase();
   const sortKey = sortOverride || state.ui?.taskSort || "priority_desc";
@@ -1407,63 +1544,6 @@ function renderTasks(tasks, targetList = tasksList, sortOverride = null) {
     }
     tagsRow.append(tagsWrap);
 
-    const checklist = document.createElement("div");
-    checklist.className = "checklist";
-    const subtasks = getSubtasks("task", task.id);
-    const listEl = document.createElement("div");
-    listEl.className = "checklist-list";
-    const renderSubtasks = () => {
-      listEl.innerHTML = "";
-      if (!subtasks.length) {
-        listEl.innerHTML = '<span class="muted">Подзадач пока нет</span>';
-        return;
-      }
-      subtasks.forEach((sub) => {
-        const item = document.createElement("label");
-        item.className = "checklist-item";
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = sub.done;
-        cb.onchange = () => {
-          const next = toggleSubtask("task", task.id, sub.id);
-          subtasks.splice(0, subtasks.length, ...next);
-          renderSubtasks();
-        };
-        const span = document.createElement("span");
-        span.textContent = sub.title;
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "ghost-btn";
-        del.textContent = "×";
-        del.onclick = () => {
-          const next = removeSubtask("task", task.id, sub.id);
-          subtasks.splice(0, subtasks.length, ...next);
-          renderSubtasks();
-        };
-        item.append(cb, span, del);
-        listEl.appendChild(item);
-      });
-    };
-    renderSubtasks();
-    const addWrap = document.createElement("div");
-    addWrap.className = "checklist-add";
-    const addInput = document.createElement("input");
-    addInput.type = "text";
-    addInput.placeholder = "Новая подзадача";
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.textContent = "+";
-    addBtn.onclick = () => {
-      const title = (addInput.value || "").trim();
-      if (!title) return;
-      const next = addSubtask("task", task.id, title);
-      subtasks.splice(0, subtasks.length, ...next);
-      addInput.value = "";
-      renderSubtasks();
-    };
-    addWrap.append(addInput, addBtn);
-    checklist.append(listEl, addWrap);
-
     const footer = document.createElement("div");
     footer.className = "entry-footer";
     const finishControl = document.createElement("div");
@@ -1488,7 +1568,8 @@ function renderTasks(tasks, targetList = tasksList, sortOverride = null) {
 
     const body = document.createElement("div");
     body.className = "card-body task-body entry-body";
-    body.append(metaLine, tagsRow, checklist, footer);
+    body.append(metaLine, tagsRow, footer);
+    upsertChecklistPreview(body, "task", task.id, ".entry-footer");
 
     card.append(head, body);
     targetList.appendChild(card);
@@ -1661,7 +1742,10 @@ function openTaskEditor(task, card) {
       wrap.className = "chip-input";
       wrap.append(tagRow, tagAddWrap);
       return wrap;
-    })()
+    })(),
+    createChecklistEditor("task", task.id, "Новая подзадача", () =>
+      upsertChecklistPreview(card.querySelector(".card-body") || card, "task", task.id, ".entry-footer")
+    )
   );
 
   const actions = document.createElement("div");
@@ -1873,63 +1957,6 @@ function renderHabits(habits, targetList = habitsList) {
     }
     tagsRow.append(tagsWrap);
 
-    const checklist = document.createElement("div");
-    checklist.className = "checklist";
-    const subtasks = getSubtasks("habit", habit.id);
-    const listEl = document.createElement("div");
-    listEl.className = "checklist-list";
-    const renderSubtasks = () => {
-      listEl.innerHTML = "";
-      if (!subtasks.length) {
-        listEl.innerHTML = '<span class="muted">Подзадач пока нет</span>';
-        return;
-      }
-      subtasks.forEach((sub) => {
-        const item = document.createElement("label");
-        item.className = "checklist-item";
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = sub.done;
-        cb.onchange = () => {
-          const next = toggleSubtask("habit", habit.id, sub.id);
-          subtasks.splice(0, subtasks.length, ...next);
-          renderSubtasks();
-        };
-        const span = document.createElement("span");
-        span.textContent = sub.title;
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "ghost-btn";
-        del.textContent = "×";
-        del.onclick = () => {
-          const next = removeSubtask("habit", habit.id, sub.id);
-          subtasks.splice(0, subtasks.length, ...next);
-          renderSubtasks();
-        };
-        item.append(cb, span, del);
-        listEl.appendChild(item);
-      });
-    };
-    renderSubtasks();
-    const addWrap = document.createElement("div");
-    addWrap.className = "checklist-add";
-    const addInput = document.createElement("input");
-    addInput.type = "text";
-    addInput.placeholder = "Новая подзадача";
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.textContent = "+";
-    addBtn.onclick = () => {
-      const title = (addInput.value || "").trim();
-      if (!title) return;
-      const next = addSubtask("habit", habit.id, title);
-      subtasks.splice(0, subtasks.length, ...next);
-      addInput.value = "";
-      renderSubtasks();
-    };
-    addWrap.append(addInput, addBtn);
-    checklist.append(listEl, addWrap);
-
     const footer = document.createElement("div");
     footer.className = "entry-footer";
     const finishControl = document.createElement("div");
@@ -1954,7 +1981,8 @@ function renderHabits(habits, targetList = habitsList) {
 
     const body = document.createElement("div");
     body.className = "card-body habit-body entry-body";
-    body.append(metaLine, tagsRow, checklist, footer);
+    body.append(metaLine, tagsRow, footer);
+    upsertChecklistPreview(body, "habit", habit.id, ".entry-footer");
 
     card.append(head, body);
     targetList.appendChild(card);
@@ -2194,7 +2222,10 @@ function openHabitEditor(habit, card) {
       wrap.className = "chip-input";
       wrap.append(tagRow, tagAddWrap);
       return wrap;
-    })()
+    })(),
+    createChecklistEditor("habit", habit.id, "Новая подзадача", () =>
+      upsertChecklistPreview(card.querySelector(".card-body") || card, "habit", habit.id, ".entry-footer")
+    )
   );
 
   const actions = document.createElement("div");
@@ -2328,7 +2359,7 @@ function renderReminders(reminders, targetList = remindersList, searchQuery = ""
     const typeLabel = reminderTypeLabel(reminder.type);
     const statusKey = reminder.is_active === false ? "snoozed" : "pending";
     const statusLabel = statusKey === "snoozed" ? "Отложено" : "Запланировано";
-    const emoji = reminder.emoji || "⏰";
+    const emoji = emojiFor("reminders", reminder.id, reminder.emoji || "⏰");
 
     const card = document.createElement("article");
     card.className = "card entry neo-card reminder-card entry-modern";
@@ -2361,70 +2392,110 @@ function renderReminders(reminders, targetList = remindersList, searchQuery = ""
       createMetaItem("&#128276;", statusLabel)
     );
 
-    const checklist = document.createElement("div");
-    checklist.className = "checklist";
-    const subtasks = getSubtasks("reminder", reminder.id);
-    const listEl = document.createElement("div");
-    listEl.className = "checklist-list";
-    const renderSubtasks = () => {
-      listEl.innerHTML = "";
-      if (!subtasks.length) {
-        listEl.innerHTML = '<span class="muted">Подзадач пока нет</span>';
-        return;
-      }
-      subtasks.forEach((sub) => {
-        const item = document.createElement("label");
-        item.className = "checklist-item";
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = sub.done;
-        cb.onchange = () => {
-          const next = toggleSubtask("reminder", reminder.id, sub.id);
-          subtasks.splice(0, subtasks.length, ...next);
-          renderSubtasks();
-        };
-        const span = document.createElement("span");
-        span.textContent = sub.title;
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "ghost-btn";
-        del.textContent = "×";
-        del.onclick = () => {
-          const next = removeSubtask("reminder", reminder.id, sub.id);
-          subtasks.splice(0, subtasks.length, ...next);
-          renderSubtasks();
-        };
-        item.append(cb, span, del);
-        listEl.appendChild(item);
-      });
-    };
-    renderSubtasks();
-    const addWrap = document.createElement("div");
-    addWrap.className = "checklist-add";
-    const addInput = document.createElement("input");
-    addInput.type = "text";
-    addInput.placeholder = "Новая подзадача";
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.textContent = "+";
-    addBtn.onclick = () => {
-      const title = (addInput.value || "").trim();
-      if (!title) return;
-      const next = addSubtask("reminder", reminder.id, title);
-      subtasks.splice(0, subtasks.length, ...next);
-      addInput.value = "";
-      renderSubtasks();
-    };
-    addWrap.append(addInput, addBtn);
-    checklist.append(listEl, addWrap);
-
     const body = document.createElement("div");
     body.className = "card-body reminder-body entry-body";
-    body.append(metaLine, checklist);
+    body.append(metaLine);
+    upsertChecklistPreview(body, "reminder", reminder.id);
 
     card.append(head, body);
     targetList.appendChild(card);
   });
+}
+
+function openReminderEditor(reminder, card) {
+  card.querySelectorAll(".inline-editor").forEach((el) => el.remove());
+  card.classList.add("editing");
+  const { date, time } = splitDateTimeParts(reminder.trigger_time);
+  const form = document.createElement("form");
+  form.className = "inline-editor neo-editor";
+
+  const emojiInput = document.createElement("input");
+  emojiInput.type = "text";
+  emojiInput.maxLength = 4;
+  emojiInput.value = emojiFor("reminders", reminder.id, reminder.emoji || "⏰");
+  emojiInput.placeholder = "Эмоджи";
+
+  const noteInput = document.createElement("textarea");
+  noteInput.value = reminder.behavior_rule || "";
+  noteInput.placeholder = "О чем напомнить";
+
+  const dateInput = document.createElement("input");
+  dateInput.type = "date";
+  dateInput.value = date || reminderDate?.value || new Date().toISOString().slice(0, 10);
+
+  const timeInput = document.createElement("input");
+  timeInput.type = "time";
+  timeInput.value = time || reminderTime?.value || "09:00";
+
+  const activeToggle = document.createElement("input");
+  activeToggle.type = "checkbox";
+  activeToggle.checked = reminder.is_active !== false;
+
+  form.append(
+    labelWrap("Эмоджи", emojiInput),
+    labelWrap("Текст напоминания", noteInput),
+    labelWrap("Дата", dateInput),
+    labelWrap("Время", timeInput),
+    labelWrap("Активно", activeToggle),
+    createChecklistEditor("reminder", reminder.id, "Новая подзадача", () =>
+      upsertChecklistPreview(card.querySelector(".card-body") || card, "reminder", reminder.id, ".inline-editor")
+    )
+  );
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.textContent = "Сохранить";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "ghost-btn";
+  cancelBtn.textContent = "Отмена";
+  cancelBtn.onclick = () => {
+    card.classList.remove("editing");
+    form.remove();
+  };
+  actions.append(saveBtn, cancelBtn);
+  form.append(actions);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const emojiValue = (emojiInput.value || "").trim() || "⏰";
+    setEmoji("reminders", reminder.id, emojiValue);
+    const payload = {
+      type: reminder.type || "time",
+      trigger_time: isoFromDateTime(dateInput.value, timeInput.value),
+      trigger_timezone: state.userTimezone || reminder.trigger_timezone || "UTC",
+      behavior_rule: noteInput.value || "Напоминание",
+      is_active: !!activeToggle.checked,
+    };
+    await saveReminderEdit(reminder.id, payload, form);
+    card.classList.remove("editing");
+  });
+
+  const container = card.querySelector(".card-body") || card;
+  container.appendChild(form);
+}
+
+async function saveReminderEdit(reminderId, payload, formNode) {
+  try {
+    await apiFetch(`/reminders/${reminderId}`, { method: "PATCH", body: JSON.stringify(payload) });
+    setStatus("Напоминание обновлено", "success");
+    formNode?.remove();
+    await loadReminders();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function deleteReminder(reminderId) {
+  try {
+    await apiFetch(`/reminders/${reminderId}`, { method: "DELETE" });
+    setStatus("Напоминание удалено", "success");
+    await loadReminders();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
 }
 
 async function loadAssistantHistory(limit = 50) {
